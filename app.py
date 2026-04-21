@@ -150,5 +150,5 @@ uploaded_file = st.file_uploader("Upload Excel", type="xlsx")
 if uploaded_file:
     with st.spinner('กำลังโหลดงับ รอเพ้บ'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ เสดล้าาาาาาาาาาาาาา!")
-        st.download_button(label="📥 Download Data", data=excel_bytes, file_name=f"POD_Final_{datetime.now().strftime('%H%M')}.xlsx")
+        st.success("💅🏻 เริ่ดเลยหล่ะะ 💅🏻")
+        st.download_button(label="📥 โหลดตรงนี้งั้บบบ", data=excel_bytes, file_name=f"POD_Final_{datetime.now().strftime('%H%M')}.xlsx")
