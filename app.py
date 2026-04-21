@@ -9,11 +9,9 @@ def process_excel_to_buffer(uploaded_file):
     # อ่านข้อมูล
     raw_df = pd.read_excel(uploaded_file, header=None)
     customer_name = str(raw_df.iloc[1, 0])
-    
-    # หา Header Row
     header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in row.values)
     
-    # Mapping Store Code (ดึงจากบรรทัดใต้ชื่อสาขา)
+    # Mapping Store Code
     header_row_raw = raw_df.iloc[header_row_index].astype(str).str.strip().tolist()
     code_row_raw = raw_df.iloc[header_row_index + 1].tolist()
     branch_to_code = {name: str(code) if pd.notna(code) else "" 
@@ -53,14 +51,13 @@ def process_excel_to_buffer(uploaded_file):
             fill = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- จัดการ Header ให้ Qty ตรงกลาง ---
-            # Merge แถวบนสำหรับ Qty (E9-G9)
+            # --- จัดการ Header Qty ให้ตรงกลาง ---
             ws.merge_cells(start_row=9, start_column=5, end_row=9, end_column=7)
             cell_qty = ws.cell(row=9, column=5, value="Qty")
             cell_qty.font = f_white; cell_qty.fill = fill; cell_qty.border = border
             cell_qty.alignment = Alignment(horizontal='center', vertical='center')
 
-            # หัวตารางแถวที่ 2
+            # หัวตารางแถวที่ 10
             sub_h = ['ORDER', 'MBL', 'BNN']
             for i, h in enumerate(sub_h, 5):
                 c = ws.cell(row=10, column=i, value=h)
@@ -73,11 +70,15 @@ def process_excel_to_buffer(uploaded_file):
                 c = ws.cell(row=9, column=i, value=h)
                 c.font = f_white; c.fill = fill; c.border = border; c.alignment = Alignment(horizontal='center', vertical='center')
 
-            # --- ตั้งค่าหน้ากระดาษ A4 (จุดที่เคย Error) ---
-            ws.page_setup.paperSize = '9'  # ใช้รหัส 9 แทน PAPERSIZE_A4
-            ws.page_setup.orientation = ws.page_setup.ORIENTATION_PORTRAIT
+            # --- แก้ไขจุดที่ทำให้เกิด Error (ใช้เลขรหัสแทน) ---
+            ws.page_setup.paperSize = '9'  # 9 = A4
+            ws.page_setup.orientation = 1  # 1 = Portrait (แนวตั้ง)
+            
+            # ตั้งค่าระยะขอบ (Margin) เล็กน้อยให้พอดี A4
+            ws.page_margins.left = 0.5
+            ws.page_margins.right = 0.5
 
-            # ส่วนลายเซ็น (ตัดหมายเหตุออกแล้ว)
+            # ลายเซ็น
             f_row = ws.max_row + 2
             ws.cell(row=f_row, column=1, value="ลงชื่อ ......................................... ผู้ส่งสินค้า").font = f_norm
             ws.cell(row=f_row, column=5, value="ลงชื่อ ......................................... ผู้ตรวจสอบ").font = f_norm
@@ -87,14 +88,14 @@ def process_excel_to_buffer(uploaded_file):
 
     return output.getvalue()
 
-# --- Streamlit UI ---
-st.title("🚚 Delivery Note Generator (A4 Fix)")
+# UI Streamlit
+st.title("🚚 Delivery Note Generator (A4 Portrait Fix)")
 file = st.file_uploader("Upload Excel", type="xlsx")
 
 if file:
     try:
         excel_bytes = process_excel_to_buffer(file)
-        st.success("ประมวลผลสำเร็จ! Qty ตรงกลาง และตั้งค่า A4 เรียบร้อย")
-        st.download_button("📥 Download Excel", excel_bytes, "delivery_note.xlsx")
+        st.success("ประมวลผลสำเร็จ! แก้ไข Error Orientation แล้ว")
+        st.download_button("📥 Download Formatted Excel", excel_bytes, "delivery_note.xlsx")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
