@@ -126,11 +126,11 @@ def process_excel_to_buffer(uploaded_file):
     return output.getvalue()
 
 # UI
-st.title("🚚 น้องเดียร์สงครามนอนด่วน")
+st.title("🚚 | POD BNN | 🚚")
 uploaded_file = st.file_uploader("Upload Excel File", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('เดียร์แอบหัวหน้าทำอยู่ รอแปป...'):
+    with st.spinner('Processing Data...'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ เริ่ดเลยหล่ะะะะะ!")
-        st.download_button(label="📥 โหลดสิ้ ทำเสร็จแล้วจะไปนอน", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
+        st.success("✅ Success!")
+        st.download_button(label="📥 Download Data", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
