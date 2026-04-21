@@ -1,89 +1,18 @@
 import streamlit as st
 import pandas as pd
 import io
-from fpdf import FPDF
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
-# --- PDF Class ---
-class DeliveryPDF(FPDF):
-    def __init__(self, footer_img_stream=None):
-        super().__init__()
-        self.footer_img_stream = footer_img_stream
-        # พยายามโหลด Font (ต้องมีไฟล์ ttf ในเครื่อง/Github)
-        try:
-            self.add_font('THSarabun', '', 'THSarabunNew.ttf', uni=True)
-            self.add_font('THSarabun', 'B', 'THSarabunNew_Bold.ttf', uni=True)
-            self.font_name = 'THSarabun'
-        except:
-            self.font_name = 'Arial' # สำรองกรณีไม่มี Font
+# ตั้งค่าหน้าเว็บ
+st.set_page_config(page_title="Delivery Generator", layout="wide")
 
-    def header_info(self, customer_name, store_code, store_name, current_date):
-        self.set_font(self.font_name, 'B', 20)
-        self.cell(0, 10, 'ใบส่งสินค้าชั่วคราว', ln=True, align='C')
-        
-        self.set_font(self.font_name, 'B', 14)
-        self.cell(120, 7, 'บริษัท โมบาย โลจิสติกส์ จำกัด')
-        self.set_x(-60)
-        self.cell(0, 7, f'Date: {current_date}', align='R', ln=True)
-        
-        self.set_font(self.font_name, '', 12)
-        self.cell(120, 5, '278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540')
-        self.set_x(-60)
-        self.cell(0, 5, 'Zone:', align='R', ln=True)
-        self.cell(120, 5, 'โทร. 02-337-1200 แฟกซ์. 02-337-1201')
-        self.set_x(-60)
-        self.cell(0, 5, f'Delivery Date: {current_date}', align='R', ln=True)
-        
-        self.ln(5)
-        self.set_font(self.font_name, 'B', 14)
-        self.cell(0, 7, f'Customer Name {customer_name}', ln=True)
-        self.cell(60, 7, f'Store Code: {store_code}')
-        self.cell(0, 7, f'Store Name: {store_name}', ln=True)
-        self.ln(2)
-
-    def draw_table(self, df, customer_name, store_code, store_name, current_date):
-        cols = [10, 35, 75, 25, 15, 15, 15]
-        headers = ['No', 'Product Code', 'Product Name', 'Unit', 'ORD', 'MBL', 'BNN']
-        
-        # Table Header
-        self.set_fill_color(46, 125, 50)
-        self.set_text_color(255, 255, 255)
-        self.set_font(self.font_name, 'B', 12)
-        
-        start_x = self.get_x()
-        for i in range(4): self.cell(cols[i], 12, headers[i], border=1, align='C', fill=True)
-        self.cell(sum(cols[4:]), 6, 'Qty', border=1, align='C', fill=True, ln=True)
-        self.set_x(start_x + sum(cols[:4]))
-        for i in range(4, 7): self.cell(cols[i], 6, headers[i], border=1, align='C', fill=True)
-        self.ln(6)
-        
-        self.set_text_color(0, 0, 0)
-        self.set_font(self.font_name, '', 12)
-        for _, row in df.iterrows():
-            if self.get_y() > 220: # ถ้าใกล้หมดหน้า
-                self.add_page()
-                self.header_info(customer_name, store_code, store_name, current_date)
-                # วาดหัวตารางใหม่ในหน้าถัดไป... (ย่อเพื่อความสั้น)
-
-            self.cell(cols[0], 7, str(row['No']), border=1, align='C')
-            self.cell(cols[1], 7, str(row['Code']), border=1)
-            self.cell(cols[2], 7, str(row['Name']), border=1)
-            self.cell(cols[3], 7, str(row['Unit']), border=1, align='C')
-            self.cell(cols[4], 7, str(row['ORD']), border=1, align='C')
-            self.cell(cols[5], 7, '', border=1)
-            self.cell(cols[6], 7, '', border=1, ln=True)
-
-    def footer(self):
-        if self.footer_img_stream:
-            # ใช้รูปภาพจากที่อัปโหลด
-            self.image(self.footer_img_stream, x=10, y=245, w=190)
-
-# --- Processing Function ---
-def process_to_pdf(uploaded_file, footer_img_file):
+def process_excel_to_buffer(uploaded_file):
+    # 1. อ่านข้อมูลต้นฉบับ
     raw_df = pd.read_excel(uploaded_file, header=None)
     header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in row.values)
     
-    # ดึงข้อมูลรหัสร้านค้า
     header_row_raw = raw_df.iloc[header_row_index].astype(str).str.strip().tolist()
     code_row_raw = raw_df.iloc[header_row_index + 1].tolist()
     branch_to_code = {name: str(code) if pd.notna(code) else "" 
@@ -92,55 +21,125 @@ def process_to_pdf(uploaded_file, footer_img_file):
     df = pd.read_excel(uploaded_file, header=header_row_index)
     df = df.iloc[1:].reset_index(drop=True)
     df.columns = df.columns.str.strip()
-    
+
     id_cols = ['Item No.', 'Description', 'UNIT']
     df_melted = df.melt(id_vars=id_cols, var_name='Branch', value_name='Qty')
     df_melted['Qty'] = pd.to_numeric(df_melted['Qty'], errors='coerce')
-    final_list = df_melted.dropna(subset=['Item No.', 'Qty'])
-    final_list = final_list[final_list['Qty'] > 0]
+    final_list = df_melted.dropna(subset=['Item No.', 'Qty']).query('Qty > 0')
 
-    # สร้าง PDF
-    pdf = DeliveryPDF(footer_img_stream=footer_img_file)
     current_date = datetime.now().strftime('%d/%m/%Y')
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        for branch_name, branch_data in final_list.groupby('Branch', sort=False):
+            store_code = branch_to_code.get(str(branch_name).strip(), "")
+            sheet_name = str(branch_name)[:30].replace('/', '-').replace(':', '')
+            
+            # เตรียม Data
+            items_df = pd.DataFrame({
+                'No': range(1, len(branch_data) + 1),
+                'Code': branch_data['Item No.'],
+                'Name': branch_data['Description'],
+                'Unit': branch_data['UNIT'],
+                'ORD': branch_data['Qty'],
+                'MBL': "", 'BNN': ""
+            })
+            items_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False, startrow=10)
+            
+            ws = writer.sheets[sheet_name]
+            
+            # --- Styles ---
+            f_title = Font(bold=True, size=16)
+            f_bold = Font(bold=True, size=10)
+            f_norm = Font(size=10)
+            f_sm = Font(size=9)
+            f_white = Font(bold=True, color="FFFFFF", size=10)
+            fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
+            border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    for branch_name, branch_data in final_list.groupby('Branch', sort=False):
-        store_code = branch_to_code.get(str(branch_name).strip(), "")
-        pdf.add_page()
-        pdf.header_info("", store_code, branch_name, current_date)
-        
-        items_df = pd.DataFrame({
-            'No': range(1, len(branch_data) + 1),
-            'Code': branch_data['Item No.'],
-            'Name': branch_data['Description'],
-            'Unit': branch_data['UNIT'],
-            'ORD': branch_data['Qty']
-        })
-        
-        # ส่งตัวแปรให้ครบเพื่อแก้ Error
-        pdf.draw_table(items_df, "", store_code, branch_name, current_date)
+            # --- Header ---
+            ws.merge_cells('A1:G1')
+            ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
+            ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
+            ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_norm
+            ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_norm
+            ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_bold
+            ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_bold
+            ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
+            ws['A6'] = "Customer Name"; ws['A6'].font = f_bold
+            ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
+            ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
 
-    return pdf.output(dest='S').encode('latin1')
+            # --- Table Header ---
+            ws.merge_cells('E9:G9')
+            ws['E9'] = "Qty"; ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border; ws['E9'].alignment = Alignment(horizontal='center')
+            
+            headers = ['No', 'Product Code', 'Product Name', 'Unit', 'ORDER', 'MBL', 'BNN']
+            for i, h in enumerate(headers, 1):
+                cell = ws.cell(row=10, column=i, value=h)
+                cell.font, cell.fill, cell.border = f_white, fill_green, border
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                if i <= 4:
+                    ws.merge_cells(start_row=9, start_column=i, end_row=10, end_column=i)
+                    ws.cell(row=9, column=i, value=h).font = f_white
+                    ws.cell(row=9, column=i).fill = fill_green
+                    ws.cell(row=9, column=i).border = border
+                    ws.cell(row=9, column=i).alignment = Alignment(horizontal='center', vertical='center')
 
-# --- Streamlit UI ---
-st.title("🚚 Delivery PDF Generator")
+            # --- Body ---
+            for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
+                for cell in row:
+                    cell.border = border; cell.font = f_norm
+                    cell.alignment = Alignment(vertical='center', wrap_text=True)
+                    if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-excel_input = st.file_uploader("1. อัปโหลดไฟล์ Excel", type="xlsx")
-# ให้ผู้ใช้อัปโหลดรูปเอง จะได้ไม่เกิด Error "หาไฟล์ไม่เจอ"
-img_input = st.file_uploader("2. อัปโหลดรูปลายเซ็น (Footer)", type=["png", "jpg"])
+            # --- สร้าง Footer เลียนแบบรูปภาพ (แปะไว้หลังจบตาราง) ---
+            last_row = ws.max_row + 2
+            
+            # แถวลายเซ็น
+            ws.cell(row=last_row, column=1, value="ผู้รับสินค้า: .......................................................").font = f_norm
+            ws.cell(row=last_row, column=5, value="ผู้ส่งสินค้า: .......................................................").font = f_norm
+            
+            ws.cell(row=last_row+1, column=1, value="วันที่: ............/............/............").font = f_sm
+            ws.cell(row=last_row+1, column=5, value="วันที่: ............/............/............").font = f_sm
+            
+            ws.cell(row=last_row+3, column=1, value="ผู้ตรวจสอบ: .......................................................").font = f_norm
+            ws.cell(row=last_row+3, column=5, value="ผู้อนุมัติ: .......................................................").font = f_norm
 
-if excel_input and img_input:
-    if st.button("สร้าง PDF"):
+            # --- Print Settings ---
+            ws.page_setup.paperSize = 9 # A4
+            ws.sheet_properties.pageSetUpPr.fitToPage = True
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 1
+            ws.print_options.horizontalCentered = True
+            ws.page_margins.left = 0.3; ws.page_margins.right = 0.3
+            
+            widths = {'A': 5, 'B': 14, 'C': 35, 'D': 10, 'E': 8, 'F': 8, 'G': 8}
+            for col, w in widths.items(): ws.column_dimensions[col].width = w
+
+    return output.getvalue(), final_list
+
+# --- UI ---
+st.title("🚚 Delivery Formatter (Stable Version)")
+st.markdown("ระบบจัดฟอร์แมตใบส่งสินค้า A4 | ไม่ต้องใช้ Font หรือรูปภาพภายนอก")
+
+uploaded_file = st.file_uploader("อัปโหลดไฟล์ Excel", type="xlsx")
+
+if uploaded_file:
+    with st.spinner('กำลังประมวลผล...'):
         try:
-            # อ่านไบนารีของรูป
-            img_byte_arr = io.BytesIO(img_input.read())
-            pdf_out = process_to_pdf(excel_input, img_byte_arr)
+            excel_bytes, preview_df = process_excel_to_buffer(uploaded_file)
+            st.success("✅ ประมวลผลสำเร็จ!")
+            
+            with st.expander("🔍 ดูรายการสรุป"):
+                st.dataframe(preview_df[['Branch', 'Item No.', 'Description', 'Qty']], hide_index=True)
             
             st.download_button(
-                label="📥 ดาวน์โหลด PDF",
-                data=pdf_out,
-                file_name="delivery_note.pdf",
-                mime="application/pdf"
+                label="📥 ดาวน์โหลดไฟล์ Excel (พร้อมปริ้นท์)",
+                data=excel_bytes,
+                file_name=f"Delivery_Note_{datetime.now().strftime('%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
         except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
-            st.warning("อย่าลืมอัปโหลดไฟล์ THSarabunNew.ttf ขึ้น Github ด้วยนะครับ!")
+            st.error(f"Error: {e}")
