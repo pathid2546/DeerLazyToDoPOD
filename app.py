@@ -177,7 +177,7 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
 # --- UI ---
-st.title("🚚 | POD BNN | 🚚")
+st.title("💅🏻 | POD BNN | 💅🏻")
 uploaded_file = st.file_uploader("Upload Excel", type="xlsx")
 
 if uploaded_file:
