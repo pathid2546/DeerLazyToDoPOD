@@ -148,7 +148,7 @@ st.title("🚚 | POD BNN | 🚚")
 uploaded_file = st.file_uploader("Upload Excel", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('กำลังคำนวณยอดรวมทั้งหมด...'):
+    with st.spinner('กำลังโหลดงับ รอเพ้บ'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ เพิ่มแถว Grand Total ในหน้าสรุปสุดท้ายเรียบร้อย!")
+        st.success("✅ เสดล้าาาาาาาาาาาาาา!")
         st.download_button(label="📥 Download Data", data=excel_bytes, file_name=f"POD_Final_{datetime.now().strftime('%H%M')}.xlsx")
