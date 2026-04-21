@@ -6,7 +6,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
 def process_excel_to_buffer(uploaded_file):
-    # 1. อ่านข้อมูลต้นฉบับ
+    # 1. อ่านข้อมูล
     raw_df = pd.read_excel(uploaded_file, header=None)
     customer_name = str(raw_df.iloc[1, 0])
     header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in row.values)
@@ -27,7 +27,6 @@ def process_excel_to_buffer(uploaded_file):
     final_list = df_melted.dropna(subset=['Item No.', 'Qty'])
     final_list = final_list[final_list['Qty'] > 0]
 
-    # วันที่ปัจจุบันสำหรับ Delivery Date
     current_date = datetime.now().strftime('%d/%m/%Y')
     output = io.BytesIO()
     
@@ -36,7 +35,6 @@ def process_excel_to_buffer(uploaded_file):
             store_code = branch_to_code.get(str(branch_name).strip(), "")
             sheet_name = str(branch_name)[:30].replace('/', '-').replace(':', '')
             
-            # เตรียมข้อมูลสินค้า (เริ่มแถว 11)
             items_df = pd.DataFrame({
                 'No': range(1, len(branch_data) + 1),
                 'Code': branch_data['Item No.'],
@@ -57,73 +55,77 @@ def process_excel_to_buffer(uploaded_file):
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- หัวกระดาษ (อ้างอิงจากรูปที่ 2) ---
+            # --- หัวกระดาษ (Header) ---
             ws.merge_cells('A1:G1')
             ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
-            
-            # ฝั่งซ้าย: ข้อมูลบริษัท
             ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
             ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_norm
             ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_norm
-            
-            # ฝั่งขวา: วันที่และ Delivery Date (เอาวันปัจจุบันมา)
             ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_bold
             ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_bold
             ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
-
-            # ข้อมูลลูกค้า
             ws['A6'] = f"Customer Name: {customer_name}"; ws['A6'].font = f_bold
             ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
             ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
 
-            # --- หัวตาราง Qty (แถว 9-10) ---
+            # --- หัวตาราง Qty ---
             ws.merge_cells('E9:G9')
-            ws['E9'] = "Qty"; ws['E9'].alignment = Alignment(horizontal='center', vertical='center')
-            ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border
+            ws['E9'] = "Qty"; ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border
+            ws['E9'].alignment = Alignment(horizontal='center', vertical='center')
             
             headers = ['No', 'Product Code', 'Product Name', 'Unit', 'ORDER', 'MBL', 'BNN']
             for i, h in enumerate(headers, 1):
                 cell = ws.cell(row=10, column=i, value=h)
                 cell.font, cell.fill, cell.border = f_white, fill_green, border
-                cell.alignment = Alignment(horizontal='center')
-                if i <= 4: # Merge No, Code, Name, Unit แนวตั้ง
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                if i <= 4:
                     ws.merge_cells(start_row=9, start_column=i, end_row=10, end_column=i)
-                    ws.cell(row=9, column=i, value=h).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=9, column=i).font, ws.cell(row=9, column=i).fill, ws.cell(row=9, column=i).border = f_white, fill_green, border
+                    cell_main = ws.cell(row=9, column=i, value=h)
+                    cell_main.font, cell_main.fill, cell_main.border = f_white, fill_green, border
+                    cell_main.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            # --- ข้อมูลและเส้นขอบ ---
+            # --- จัดการข้อมูลสินค้าและ Unit Auto Wrap ---
             for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
                 for cell in row:
                     cell.border = border; cell.font = f_norm
-                    if cell.column in [1, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
+                    # คอลัมน์ Unit (คอลัมน์ที่ 4 / D)
+                    if cell.column == 4:
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                    elif cell.column in [1, 5, 6, 7]:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                    else:
+                        cell.alignment = Alignment(vertical='center')
 
             # ลายเซ็น
             f_row = ws.max_row + 2
             ws.cell(row=f_row, column=1, value="ลงชื่อ ......................................... ผู้ส่งสินค้า").font = f_norm
             ws.cell(row=f_row, column=5, value="ลงชื่อ ......................................... ผู้ตรวจสอบ").font = f_norm
 
-            # --- ตั้งค่า A4 ---
+            # --- **การตั้งค่าพิมพ์กึ่งกลางหน้ากระดาษ A4** ---
             ws.page_setup.paperSize = 9 
             ws.page_setup.orientation = 'portrait'
             ws.page_setup.fitToWidth = 1 
             ws.page_setup.fitToHeight = 0
             
-            # ปรับความกว้างคอลัมน์ (คุมให้อยู่ในหน้าเดียว)
-            widths = {'A': 4.5, 'B': 13, 'C': 32, 'D': 8, 'E': 8, 'F': 8, 'G': 8}
+            # บังคับให้อยู่กึ่งกลางหน้า (Center on Page)
+            ws.print_options.horizontalCentered = True # กึ่งกลางแนวนอน
+            
+            # ปรับขนาดคอลัมน์ให้พอดี
+            widths = {'A': 4.5, 'B': 13, 'C': 32, 'D': 9, 'E': 7, 'F': 7, 'G': 7}
             for col, w in widths.items(): ws.column_dimensions[col].width = w
             
-            ws.page_margins.left = 0.25; ws.page_margins.right = 0.25
+            ws.page_margins.left = 0.3; ws.page_margins.right = 0.3
 
     return output.getvalue()
 
 # Streamlit UI
-st.title("🚚 Delivery Generator (Fix Delivery Date)")
+st.title("🚚 Delivery Generator (Center Print & Auto Unit)")
 file = st.file_uploader("Upload Excel", type="xlsx")
 
 if file:
     try:
         excel_bytes = process_excel_to_buffer(file)
-        st.success("ประมวลผลสำเร็จ! เปลี่ยน Ref No เป็น Delivery Date แล้ว")
-        st.download_button("📥 Download Excel", excel_bytes, f"delivery_{datetime.now().strftime('%d%m')}.xlsx")
+        st.success("เรียบร้อย! ตารางอยู่กึ่งกลางหน้าและคอลัมน์ Unit จะตัดบรรทัดให้อัตโนมัติ")
+        st.download_button("📥 Download Final Excel", excel_bytes, "delivery_centered.xlsx")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
