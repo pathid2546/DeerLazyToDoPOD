@@ -68,7 +68,7 @@ def process_excel_to_buffer(uploaded_file):
             ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
             ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
 
-            # --- หัวตาราง Qty ---
+            # --- หัวตาราง Qty (แถว 9-10) ---
             ws.merge_cells('E9:G9')
             ws['E9'] = "Qty"; ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border
             ws['E9'].alignment = Alignment(horizontal='center', vertical='center')
@@ -84,12 +84,11 @@ def process_excel_to_buffer(uploaded_file):
                     cell_main.font, cell_main.fill, cell_main.border = f_white, fill_green, border
                     cell_main.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            # --- จัดการข้อมูลสินค้าและ Unit Auto Wrap ---
+            # --- ข้อมูลสินค้า ---
             for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
                 for cell in row:
                     cell.border = border; cell.font = f_norm
-                    # คอลัมน์ Unit (คอลัมน์ที่ 4 / D)
-                    if cell.column == 4:
+                    if cell.column == 4: # Unit Column (Wrap Text)
                         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                     elif cell.column in [1, 5, 6, 7]:
                         cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -101,31 +100,37 @@ def process_excel_to_buffer(uploaded_file):
             ws.cell(row=f_row, column=1, value="ลงชื่อ ......................................... ผู้ส่งสินค้า").font = f_norm
             ws.cell(row=f_row, column=5, value="ลงชื่อ ......................................... ผู้ตรวจสอบ").font = f_norm
 
-            # --- **การตั้งค่าพิมพ์กึ่งกลางหน้ากระดาษ A4** ---
-            ws.page_setup.paperSize = 9 
+            # --- **แก้ปัญหาความเอียง (Print Alignment)** ---
+            ws.page_setup.paperSize = 9 # A4
             ws.page_setup.orientation = 'portrait'
             ws.page_setup.fitToWidth = 1 
             ws.page_setup.fitToHeight = 0
             
-            # บังคับให้อยู่กึ่งกลางหน้า (Center on Page)
-            ws.print_options.horizontalCentered = True # กึ่งกลางแนวนอน
+            # บังคับกึ่งกลาง (Center on Page)
+            ws.print_options.horizontalCentered = True
             
-            # ปรับขนาดคอลัมน์ให้พอดี
-            widths = {'A': 4.5, 'B': 13, 'C': 32, 'D': 9, 'E': 7, 'F': 7, 'G': 7}
-            for col, w in widths.items(): ws.column_dimensions[col].width = w
+            # ปรับความกว้างคอลัมน์ใหม่ (รวมกันได้ ~77.5 พอดีพื้นที่กระดาษ)
+            # เพิ่ม Name ให้กว้างขึ้นเพื่อดันตารางให้เต็มหน้า
+            widths = {'A': 5.0, 'B': 14.0, 'C': 35.0, 'D': 9.5, 'E': 8.0, 'F': 8.0, 'G': 8.0}
+            for col, w in widths.items():
+                ws.column_dimensions[col].width = w
             
-            ws.page_margins.left = 0.3; ws.page_margins.right = 0.3
+            # ปรับ Margin ให้เท่ากันเป๊ะทั้งสองข้าง
+            ws.page_margins.left = 0.25
+            ws.page_margins.right = 0.25
+            ws.page_margins.top = 0.5
+            ws.page_margins.bottom = 0.5
 
     return output.getvalue()
 
 # Streamlit UI
-st.title("🚚 Delivery Generator (Center Print & Auto Unit)")
+st.title("🚚 Delivery Generator (Fix Center & Unit)")
 file = st.file_uploader("Upload Excel", type="xlsx")
 
 if file:
     try:
         excel_bytes = process_excel_to_buffer(file)
-        st.success("เรียบร้อย! ตารางอยู่กึ่งกลางหน้าและคอลัมน์ Unit จะตัดบรรทัดให้อัตโนมัติ")
-        st.download_button("📥 Download Final Excel", excel_bytes, "delivery_centered.xlsx")
+        st.success("ประมวลผลสำเร็จ! แก้ไขความกว้างและจัดกึ่งกลางหน้ากระดาษให้แล้วครับ")
+        st.download_button("📥 Download Final Excel", excel_bytes, "delivery_perfect_center.xlsx")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
