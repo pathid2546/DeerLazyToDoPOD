@@ -51,7 +51,7 @@ def process_excel_to_buffer(uploaded_file):
             fill = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- จัดการ Header Qty ให้ตรงกลาง ---
+            # --- Qty Center ---
             ws.merge_cells(start_row=9, start_column=5, end_row=9, end_column=7)
             cell_qty = ws.cell(row=9, column=5, value="Qty")
             cell_qty.font = f_white; cell_qty.fill = fill; cell_qty.border = border
@@ -70,11 +70,10 @@ def process_excel_to_buffer(uploaded_file):
                 c = ws.cell(row=9, column=i, value=h)
                 c.font = f_white; c.fill = fill; c.border = border; c.alignment = Alignment(horizontal='center', vertical='center')
 
-            # --- แก้ไขจุดที่ทำให้เกิด Error (ใช้เลขรหัสแทน) ---
-            ws.page_setup.paperSize = '9'  # 9 = A4
-            ws.page_setup.orientation = 1  # 1 = Portrait (แนวตั้ง)
+            # --- ตั้งค่า A4 และแนวตั้ง (แบบที่ Server ยอมรับ) ---
+            ws.page_setup.paperSize = 9 # ใส่เลข 9 ตรงๆ สำหรับ A4
+            ws.page_setup.orientation = 'portrait' # ใส่เป็น Text ตามที่ Error แจ้ง
             
-            # ตั้งค่าระยะขอบ (Margin) เล็กน้อยให้พอดี A4
             ws.page_margins.left = 0.5
             ws.page_margins.right = 0.5
 
@@ -89,13 +88,13 @@ def process_excel_to_buffer(uploaded_file):
     return output.getvalue()
 
 # UI Streamlit
-st.title("🚚 Delivery Note Generator (A4 Portrait Fix)")
+st.title("🚚 Delivery Generator (Fix Orientation Value)")
 file = st.file_uploader("Upload Excel", type="xlsx")
 
 if file:
     try:
         excel_bytes = process_excel_to_buffer(file)
-        st.success("ประมวลผลสำเร็จ! แก้ไข Error Orientation แล้ว")
-        st.download_button("📥 Download Formatted Excel", excel_bytes, "delivery_note.xlsx")
+        st.success("สำเร็จ! แก้ไขค่า Orientation เป็น 'portrait' เรียบร้อย")
+        st.download_button("📥 Download Excel", excel_bytes, "delivery_note.xlsx")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
