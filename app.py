@@ -6,15 +6,13 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="POD BNN - Fabulous Edition", layout="wide")
-
-# --- ฟังก์ชันเอฟเฟกต์ 💅🏻 แบบบังคับพุ่ง ---
+# --- ฟังก์ชันเอฟเฟกต์ 💅🏻✨ เล็บเจลสับๆ ---
 def show_fabulous_popup():
     # เราใช้ Components.html เพื่อรัน JS แยกส่วน บังคับให้แสดงผล
     components.html(
         """
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-        <div id="fabulous-container" style="display:flex; justify-content:center; align-items:center; height:100vh;">
+        <div id="fabulous-container" style="display:flex; justify-content:center; align-items:center; height:100vh; position: fixed; top: 0; left: 0; width: 100vw; z-index: 99999; pointer-events: none;">
             <h1 id="text" style="
                 font-family: 'Tahoma', sans-serif; 
                 font-size: 100px; 
@@ -23,34 +21,42 @@ def show_fabulous_popup():
                 opacity: 0;
                 transition: all 0.5s ease-out;
                 transform: scale(0.5);
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.5);
             ">เริ่ดเลยหล่ะ</h1>
         </div>
         <script>
             const text = document.getElementById('text');
             setTimeout(() => {
                 text.style.opacity = '1';
-                text.style.transform = 'scale(1.2)';
+                text.style.transform = 'translate(-50%, -50%) scale(1.2)';
             }, 100);
 
             var end = Date.now() + (3 * 1000);
             var scalar = 4;
+            // เพิ่มความหลากหลายของเล็บ
             var nail = confetti.shapeFromText({ text: '💅🏻', scalar });
+            var nail2 = confetti.shapeFromText({ text: '💅🏼', scalar });
+            var nail3 = confetti.shapeFromText({ text: '💅🏽', scalar });
+            var star = confetti.shapeFromText({ text: '✨', scalar });
 
             (function frame() {
                 confetti({
-                    particleCount: 10,
+                    particleCount: 15,
                     angle: 60,
                     spread: 70,
                     origin: { x: 0, y: 0.8 },
-                    shapes: [nail],
+                    shapes: [nail, nail2, nail3, star],
                     scalar
                 });
                 confetti({
-                    particleCount: 10,
+                    particleCount: 15,
                     angle: 120,
                     spread: 70,
                     origin: { x: 1, y: 0.8 },
-                    shapes: [nail],
+                    shapes: [nail, nail2, nail3, star],
                     scalar
                 });
                 if (Date.now() < end) {
@@ -59,7 +65,7 @@ def show_fabulous_popup():
             }());
         </script>
         """,
-        height=300, # กำหนดความสูงให้มองเห็นตัวหนังสือ
+        height=0, # กำหนดความสูงเป็น 0 เพื่อไม่ให้กินพื้นที่ UI แต่ JS จะรันแบบ Fixed
     )
 
 # --- ฟังก์ชันประมวลผล Excel (เหมือนเดิม) ---
@@ -164,24 +170,39 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
 # --- UI ---
-st.markdown("<h1 style='text-align: center; color: #2E7D32;'>💅🏻 POD FABULOUS GENERATOR 💅🏻</h1>", unsafe_allow_html=True)
+# ใช้ Markdown เพื่อสร้าง Header ที่มีความสับระดับตัวแม่
+st.markdown("<h1 style='text-align: center; color: #ff4bad; text-shadow: 2px 2px 5px rgba(0,0,0,0.2);'>✨💅🏻 POD FABULOUS GENERATOR 💅🏻✨</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #666;'>จัดการไฟล์แบบตัวแม่ สวย สับ ปัง! ไม่ใช่แค่ลูกโป่งพื้นๆ</p>", unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload ไฟล์ Excel ที่นี่", type="xlsx")
+uploaded_file = st.file_uploader("Upload ไฟล์ Excel ที่แม่ต้องจัดการที่นี่", type="xlsx")
 
 if uploaded_file:
+    # เพิ่ม Button ที่มีความเริ่ด
     if st.button("✨ เริ่มความเริ่ด (Process Data) ✨", use_container_width=True):
-        with st.spinner('ความสวยกำลังเดินทางมา...'):
+        with st.spinner('ความสวยกำลังเดินทางมา... แป๊บนึงนะแม่...'):
             st.session_state.excel_bytes = process_excel_to_buffer(uploaded_file)
             st.session_state.done = True
 
     if st.session_state.get('done'):
-        # แสดงเอฟเฟกต์ 💅🏻 พุ่งกระจาย
+        # แสดงเอฟเฟกต์ 💅🏻✨ เล็บเจลพุ่งกระจายแบบ Sandboxed บังคับแสดงผล
         show_fabulous_popup()
         
+        # แสดงข้อความสำเร็จแบบตัวแม่
+        st.markdown(
+            """
+            <div style="background-color: #ffefff; padding: 20px; border-radius: 10px; border: 2px solid #ff4bad; text-align: center; margin-bottom: 20px;">
+                <h3 style="color: #ff4bad; margin: 0;">เริ่ดมากค่ะแม่!</h3>
+                <p style="color: #666; margin: 5px 0 0 0;">ประมวลผลเสร็จแล้วค่ะ สวยสับระดับ 10</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        # ปุ่มดาวน์โหลดที่ตัดลูกโป่งพื้นๆ ออกไป
         st.download_button(
-            label="💅🏻 ดาวน์โหลดไฟล์ที่เริ่ดที่สุดในโลก 💅🏻",
+            label="💅🏻 ดาวน์โหลดไฟล์ที่เริ่ดที่สุดในสามโลก 💅🏻",
             data=st.session_state.excel_bytes,
-            file_name=f"POD_BNN_Fabulous.xlsx",
+            file_name=f"POD_BNN_Fabulous_{datetime.now().strftime('%H%M')}.xlsx",
             use_container_width=True,
-            on_click=lambda: st.balloons()
+            # ตัด st.balloons() ออกไปเลย!
         )
