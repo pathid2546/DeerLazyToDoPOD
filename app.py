@@ -5,7 +5,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
-st.set_page_config(page_title="Delivery Generator", layout="wide")
+st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 
 def process_excel_to_buffer(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -45,77 +45,92 @@ def process_excel_to_buffer(uploaded_file):
             
             ws = writer.sheets[sheet_name]
             
-            # Styles
-            f_bold = Font(bold=True, size=10)
-            f_norm = Font(size=10)
-            f_white = Font(bold=True, color="FFFFFF", size=10)
+            # --- Styles (Cordia New) ---
+            font_name = 'Cordia New'
+            f_title = Font(name=font_name, bold=True, size=18)
+            f_header = Font(name=font_name, bold=True, size=14)
+            f_data = Font(name=font_name, size=12)
+            f_white = Font(name=font_name, bold=True, color="FFFFFF", size=12)
+            
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
+            fill_light = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid") # สีเว้นบรรทัด
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- Header (Logic เดิม) ---
+            # --- Header ---
             ws.merge_cells('A1:G1')
-            ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = Font(bold=True, size=16); ws['A1'].alignment = Alignment(horizontal='center')
-            ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
-            ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right')
-            ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right')
-            ws['A6'] = "Customer Name"; ws['A6'].font = f_bold
-            ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
-            ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
+            ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
+            ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
+            ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
+            ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
+            
+            ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
+            ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_header
+            ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
+            
+            ws['A6'] = "Customer Name"; ws['A6'].font = f_header
+            ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_header
+            ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_header
 
             # --- Table Header ---
             ws.merge_cells('E9:G9')
             ws['E9'] = "Qty"; ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border; ws['E9'].alignment = Alignment(horizontal='center')
-            for i, h in enumerate(['No', 'Product Code', 'Product Name', 'Unit', 'ORDER', 'MBL', 'BNN'], 1):
+            
+            headers = ['No', 'Product Code', 'Product Name', 'Unit', 'ORDER', 'MBL', 'BNN']
+            for i, h in enumerate(headers, 1):
                 cell = ws.cell(row=10, column=i, value=h)
                 cell.font, cell.fill, cell.border = f_white, fill_green, border
                 cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            # --- Table Body ---
-            for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
+            # --- Table Body (มีสีเว้นบรรทัด) ---
+            for r_idx, row in enumerate(ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7), 1):
                 for cell in row:
-                    cell.border = border; cell.font = f_norm
+                    cell.border = border
+                    cell.font = f_data
+                    if r_idx % 2 == 0: cell.fill = fill_light # สลับสีบรรทัด
                     if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-            # --- ** ส่วนท้ายแบบแยกบรรทัด + ตารางสรุปฝั่งขวา ** ---
+            # --- Footer (แยกบรรทัด + ตารางสรุปใหม่) ---
             start_f = ws.max_row + 2
             
-            # ฝั่งซ้าย: แยกบรรทัด
+            # ฝั่งซ้าย
             labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
             for i, label in enumerate(labels):
-                ws.cell(row=start_f + i, column=1, value=f"{label} .......................................................").font = f_norm
+                c = ws.cell(row=start_f + i, column=1, value=f"{label} .......................................................")
+                c.font = f_header
             
-            # ฝั่งขวา: ตารางสรุป (เริ่มที่ Column E)
+            # ฝั่งขวา (ตารางสรุปเปลี่ยนชื่อตามสั่ง)
             summary_headers = ["", "MBL", "BNN"]
             for i, h in enumerate(summary_headers):
                 c = ws.cell(row=start_f, column=5+i, value=h)
                 c.font, c.fill, c.border = f_white, fill_green, border
                 c.alignment = Alignment(horizontal='center')
             
-            # แถวข้อมูลในตารางสรุป
-            summary_rows = ["จำนวนชิ้น", "จำนวนกล่อง"]
+            # เปลี่ยนคำ: ตะกร้าใหญ่ / ตะกร้าเล็ก
+            summary_rows = ["ตะกร้าใหญ่", "ตะกร้าเล็ก"]
             for r_idx, label in enumerate(summary_rows, 1):
-                ws.cell(row=start_f + r_idx, column=5, value=label).border = border
+                c_label = ws.cell(row=start_f + r_idx, column=5, value=label)
+                c_label.font, c_label.border = f_header, border
                 ws.cell(row=start_f + r_idx, column=6).border = border
                 ws.cell(row=start_f + r_idx, column=7).border = border
 
             # Print Settings
-            ws.page_setup.paperSize = 9
+            ws.page_setup.paperSize = 9 # A4
             ws.sheet_properties.pageSetUpPr.fitToPage = True
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 1
             ws.print_options.horizontalCentered = True
             
-            widths = {'A': 6, 'B': 14, 'C': 35, 'D': 10, 'E': 10, 'F': 10, 'G': 10}
+            widths = {'A': 6, 'B': 15, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
             for col, w in widths.items(): ws.column_dimensions[col].width = w
 
     return output.getvalue()
 
 # UI
-st.title("🚚 Delivery Formatter (Final Layout)")
-uploaded_file = st.file_uploader("Upload Excel", type="xlsx")
+st.title("🚚 Delivery Formatter Pro (Cordia Version)")
+uploaded_file = st.file_uploader("Upload Excel File", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('กำลังจัดรูปแบบ...'):
+    with st.spinner('กำลังปรับแต่งความสวยงาม...'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ จัดฟอร์แมตส่วนท้ายแบบแยกบรรทัดและตารางสรุปเรียบร้อย!")
-        st.download_button(label="📥 Download Excel", data=excel_bytes, file_name=f"Delivery_{datetime.now().strftime('%H%M')}.xlsx")
+        st.success("✅ ปรับฟอนต์ Cordia, สีเว้นบรรทัด และเปลี่ยนชื่อตะกร้าเรียบร้อยแล้ว!")
+        st.download_button(label="📥 Download Excel ที่ปรับปรุงแล้ว", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
