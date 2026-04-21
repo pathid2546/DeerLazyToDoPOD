@@ -133,4 +133,4 @@ if uploaded_file:
     with st.spinner('เดียร์แอบหัวหน้าทำอยู่ รอแปป...'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
         st.success("✅ เริ่ดเลยหล่ะะะะะ!")
-        st.download_button(label="📥 Download Excel ที่ปรับปรุงแล้ว", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
+        st.download_button(label="📥 โหลดสิ้ ทำเสร็จแล้วจะไปนอน", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
