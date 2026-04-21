@@ -5,6 +5,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
+# ตั้งค่าหน้าเว็บ Streamlit
+st.set_page_config(page_title="Delivery Generator", layout="wide")
+
 def process_excel_to_buffer(uploaded_file):
     # 1. อ่านข้อมูล
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -47,28 +50,30 @@ def process_excel_to_buffer(uploaded_file):
             
             ws = writer.sheets[sheet_name]
             
-            # --- Styles ---
-            f_title = Font(name='Sarabun', bold=True, size=16)
-            f_bold = Font(name='Sarabun', bold=True, size=9)
-            f_norm = Font(name='Sarabun', size=9)
-            f_white = Font(name='Sarabun', bold=True, color="FFFFFF", size=9)
+            # --- Styles (ใช้ Cordia New) ---
+            f_title = Font(name='Cordia New', bold=True, size=20)
+            f_bold = Font(name='Cordia New', bold=True, size=14)
+            f_norm = Font(name='Cordia New', size=14)
+            f_white = Font(name='Cordia New', bold=True, color="FFFFFF", size=14)
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- หัวกระดาษ (Header) ---
+            # --- Header ---
             ws.merge_cells('A1:G1')
             ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
             ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
             ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_norm
             ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_norm
+            
             ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_bold
             ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_bold
             ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
+            
             ws['A6'] = f"Customer Name: {customer_name}"; ws['A6'].font = f_bold
             ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
             ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
 
-            # --- หัวตาราง Qty (แถว 9-10) ---
+            # --- Table Header ---
             ws.merge_cells('E9:G9')
             ws['E9'] = "Qty"; ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border
             ws['E9'].alignment = Alignment(horizontal='center', vertical='center')
@@ -84,53 +89,60 @@ def process_excel_to_buffer(uploaded_file):
                     cell_main.font, cell_main.fill, cell_main.border = f_white, fill_green, border
                     cell_main.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            # --- ข้อมูลสินค้า ---
+            # --- Data Rows ---
             for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
                 for cell in row:
                     cell.border = border; cell.font = f_norm
-                    if cell.column == 4: # Unit Column (Wrap Text)
+                    cell.alignment = Alignment(vertical='center', wrap_text=True)
+                    if cell.column in [1, 4, 5, 6, 7]:
                         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                    elif cell.column in [1, 5, 6, 7]:
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    else:
-                        cell.alignment = Alignment(vertical='center')
 
-            # ลายเซ็น
-            f_row = ws.max_row + 2
-            ws.cell(row=f_row, column=1, value="ลงชื่อ ......................................... ผู้ส่งสินค้า").font = f_norm
-            ws.cell(row=f_row, column=5, value="ลงชื่อ ......................................... ผู้ตรวจสอบ").font = f_norm
-
-            # --- **แก้ปัญหาความเอียง (Print Alignment)** ---
-            ws.page_setup.paperSize = 9 # A4
+            # --- Print Settings (Center & Fit) ---
+            ws.page_setup.paperSize = 9 
             ws.page_setup.orientation = 'portrait'
             ws.page_setup.fitToWidth = 1 
             ws.page_setup.fitToHeight = 0
-            
-            # บังคับกึ่งกลาง (Center on Page)
             ws.print_options.horizontalCentered = True
             
-            # ปรับความกว้างคอลัมน์ใหม่ (รวมกันได้ ~77.5 พอดีพื้นที่กระดาษ)
-            # เพิ่ม Name ให้กว้างขึ้นเพื่อดันตารางให้เต็มหน้า
-            widths = {'A': 5.0, 'B': 14.0, 'C': 35.0, 'D': 9.5, 'E': 8.0, 'F': 8.0, 'G': 8.0}
-            for col, w in widths.items():
-                ws.column_dimensions[col].width = w
+            # Margins & Widths
+            ws.page_margins.left = 0.25; ws.page_margins.right = 0.25
+            widths = {'A': 5, 'B': 14, 'C': 35, 'D': 10, 'E': 8, 'F': 8, 'G': 8}
+            for col, w in widths.items(): ws.column_dimensions[col].width = w
+
+    return output.getvalue(), final_list
+
+# --- UI Layout ---
+st.title("🚚 Delivery Formatter")
+st.subheader("จัดรูปแบบใบส่งสินค้า A4 (Cordia New)")
+
+uploaded_file = st.file_uploader("เลือกไฟล์ Excel (TestPOD)", type="xlsx")
+
+if uploaded_file:
+    with st.spinner('กำลังประมวลผลข้อมูล...'):
+        try:
+            excel_bytes, preview_data = process_excel_to_buffer(uploaded_file)
             
-            # ปรับ Margin ให้เท่ากันเป๊ะทั้งสองข้าง
-            ws.page_margins.left = 0.25
-            ws.page_margins.right = 0.25
-            ws.page_margins.top = 0.5
-            ws.page_margins.bottom = 0.5
+            # ส่วน Preview ข้อมูล
+            st.success("✅ ประมวลผลสำเร็จ!")
+            
+            with st.expander("🔍 ดูตัวอย่างข้อมูลที่ประมวลผล (Preview)", expanded=True):
+                # แสดงแค่บางคอลัมน์ให้ดูง่าย
+                st.dataframe(preview_data[['Branch', 'Item No.', 'Description', 'Qty']], 
+                             use_container_width=True, hide_index=True)
+            
+            # ปุ่มดาวน์โหลด
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                st.download_button(
+                    label="📥 ดาวน์โหลดไฟล์ Excel",
+                    data=excel_bytes,
+                    file_name=f"Delivery_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            with col2:
+                st.info("💡 ไฟล์ที่ดาวน์โหลดจะถูกตั้งค่า Font เป็น Cordia New และจัดกึ่งกลางหน้ากระดาษ A4 พร้อมสั่งพิมพ์ได้ทันที")
 
-    return output.getvalue()
-
-# Streamlit UI
-st.title("🚚 Delivery Generator (Fix Center & Unit)")
-file = st.file_uploader("Upload Excel", type="xlsx")
-
-if file:
-    try:
-        excel_bytes = process_excel_to_buffer(file)
-        st.success("ประมวลผลสำเร็จ! แก้ไขความกว้างและจัดกึ่งกลางหน้ากระดาษให้แล้วครับ")
-        st.download_button("📥 Download Final Excel", excel_bytes, "delivery_perfect_center.xlsx")
-    except Exception as e:
-        st.error(f"เกิดข้อผิดพลาด: {e}")
+        except Exception as e:
+            st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+            st.info("โปรดตรวจสอบว่าไฟล์ Excel มีคอลัมน์ 'Item No.' และรูปแบบถูกต้องตามต้นฉบับ")
