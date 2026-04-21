@@ -43,7 +43,6 @@ def process_excel_to_buffer(uploaded_file):
                 'MBL': "", 'BNN': ""
             })
             items_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False, startrow=10)
-            
             ws = writer.sheets[sheet_name]
             apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=False)
 
@@ -53,10 +52,25 @@ def process_excel_to_buffer(uploaded_file):
         summary_all['MBL'] = ""
         summary_all['BNN'] = ""
         
+        # เพิ่มแถว Grand Total ใน DataFrame ก่อนเขียนลง Excel
+        grand_total = summary_all['Qty'].sum()
+        
         sheet_name_sum = "Summary_All"
         summary_all.to_excel(writer, sheet_name=sheet_name_sum, index=False, header=False, startrow=10)
         ws_sum = writer.sheets[sheet_name_sum]
-        apply_styles_to_sheet(ws_sum, "สรุปยอดรวมทั้งหมด", "ALL", current_date, is_summary=True)
+        
+        # เขียนแถวรวมยอดท้ายตารางหน้าสรุป
+        last_row = 10 + len(summary_all) + 1
+        ws_sum.cell(row=last_row, column=3, value="Grand Total (ยอดรวมทั้งหมด)").font = Font(name='Cordia New', bold=True, size=14)
+        ws_sum.cell(row=last_row, column=3).alignment = Alignment(horizontal='right')
+        
+        qty_total_cell = ws_sum.cell(row=last_row, column=5, value=grand_total)
+        qty_total_cell.font = Font(name='Cordia New', bold=True, size=14)
+        qty_total_cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid") # ไฮไลท์สีเหลือง
+        qty_total_cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='double'))
+        qty_total_cell.alignment = Alignment(horizontal='center')
+
+        apply_styles_to_sheet(ws_sum, "สรุปยอดรวมทุกรายการ", "ALL", current_date, is_summary=True)
 
     return output.getvalue()
 
@@ -70,27 +84,22 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
     fill_light = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    # --- Header Information (ส่วนที่หายไป) ---
+    # Header
     ws.merge_cells('A1:G1')
     ws['A1'] = "ใบสรุปรายการเบิกสินค้า" if is_summary else "ใบส่งสินค้าชั่วคราว"
     ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
-    
-    # ฝั่งซ้าย: ข้อมูลบริษัท
     ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
     ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
     ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
     
-    # ฝั่งขวา: วันที่และรายละเอียด
     ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
-    ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_header
     ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
     
-    # ข้อมูลสาขา/ลูกค้า
     ws['A6'] = "Customer Name"; ws['A6'].font = f_header
-    ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_header
-    ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_header
+    ws['A7'] = f"Code: {store_code}"; ws['A7'].font = f_header
+    ws['C7'] = f"Name: {branch_name}"; ws['C7'].font = f_header
 
-    # --- Table Header ---
+    # Table Header
     ws.merge_cells('E9:G9')
     ws['E9'] = "Total Qty" if is_summary else "Qty"
     ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border; ws['E9'].alignment = Alignment(horizontal='center')
@@ -101,54 +110,45 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
         cell.font, cell.fill, cell.border = f_white, fill_green, border
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    # --- Table Body ---
+    # Body
     for r_idx, row in enumerate(ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7), 1):
+        # ข้ามแถว Grand Total ที่เราเขียนไปแล้ว ไม่ให้โดนทับ
+        if ws.cell(row=row[0].row, column=3).value == "Grand Total (ยอดรวมทั้งหมด)": continue
         for cell in row:
             cell.border = border; cell.font = f_data
             if r_idx % 2 == 0: cell.fill = fill_light
             if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-    # --- Footer (ผู้รับ/ผู้ส่ง + ตารางตะกร้า) ---
-    curr_row = ws.max_row + 2
-    labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
-    for i, label in enumerate(labels):
-        cell = ws.cell(row=curr_row + i, column=1, value=f"{label} .......................................................")
-        cell.font = f_header
-    
-    # ตารางตะกร้าฝั่งขวา
-    summary_start_row = curr_row
-    summary_headers = ["", "MBL", "BNN"]
-    for i, h in enumerate(summary_headers):
-        c = ws.cell(row=summary_start_row, column=5+i, value=h)
-        c.font, c.fill, c.border = f_white, fill_green, border
-        c.alignment = Alignment(horizontal='center')
-    
-    summary_rows = ["ตะกร้าใหญ่", "ตะกร้าเล็ก"]
-    for i, label in enumerate(summary_rows, 1):
-        ws.cell(row=summary_start_row + i, column=5, value=label).font = f_header
-        ws.cell(row=summary_start_row + i, column=5).border = border
-        ws.cell(row=summary_start_row + i, column=6).border = border
-        ws.cell(row=summary_start_row + i, column=7).border = border
+    # Footer (ผู้รับ/ผู้ส่ง) - ไม่แสดงในหน้า Summary All เพื่อความสะอาด
+    if not is_summary:
+        curr_row = ws.max_row + 2
+        labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
+        for i, label in enumerate(labels):
+            ws.cell(row=curr_row + i, column=1, value=f"{label} .......................................................").font = f_header
+        
+        # ตารางตะกร้า
+        s_row = curr_row
+        for i, h in enumerate(["", "MBL", "BNN"]):
+            c = ws.cell(row=s_row, column=5+i, value=h)
+            c.font, c.fill, c.border = f_white, fill_green, border; c.alignment = Alignment(horizontal='center')
+        for i, label in enumerate(["ตะกร้าใหญ่", "ตะกร้าเล็ก"], 1):
+            ws.cell(row=s_row + i, column=5, value=label).font = f_header
+            ws.cell(row=s_row + i, column=5).border = border
+            ws.cell(row=s_row + i, column=6).border = border
+            ws.cell(row=s_row + i, column=7).border = border
 
-    # --- Settings ---
-    ws.page_setup.paperSize = 9 # A4
+    ws.page_setup.paperSize = 9
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
-# --- UI ---
 st.title("🚚 | POD BNN | 🚚")
-uploaded_file = st.file_uploader("Upload Excel File", type="xlsx")
+uploaded_file = st.file_uploader("Upload Excel", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('กำลังจัดทำข้อมูลพร้อมหน้าสรุปยอดรวม...'):
+    with st.spinner('กำลังคำนวณยอดรวมทั้งหมด...'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ แก้ไขข้อมูลที่อยู่และ Delivery Date กลับมาให้ครบแล้ว!")
-        st.download_button(
-            label="📥 Download Data", 
-            data=excel_bytes, 
-            file_name=f"Delivery_Full_Report_{datetime.now().strftime('%H%M')}.xlsx",
-            use_container_width=True
-        )
+        st.success("✅ เพิ่มแถว Grand Total ในหน้าสรุปสุดท้ายเรียบร้อย!")
+        st.download_button(label="📥 Download Data", data=excel_bytes, file_name=f"POD_Final_{datetime.now().strftime('%H%M')}.xlsx")
