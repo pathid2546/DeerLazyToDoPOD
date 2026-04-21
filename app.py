@@ -139,7 +139,7 @@ with col1:
     excel_file = st.file_uploader("1. อัปโหลดไฟล์ Excel", type="xlsx")
 with col2:
     # ในที่นี้คือรูปภาพที่คุณอัปโหลดมา ผมจำลองว่าเป็น footer_img.png
-    footer_img = "image_bae9a6.png" 
+    footer_img = "Footer.png" 
     st.image(footer_img, caption="รูปส่วนท้ายที่จะนำไปแปะ", width=300)
 
 if excel_file:
