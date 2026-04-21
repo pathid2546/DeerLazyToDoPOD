@@ -50,22 +50,26 @@ def process_excel_to_buffer(uploaded_file):
             
             ws = writer.sheets[sheet_name]
             
-            # --- Styles (ใช้ Font มาตรฐานแต่ปรับขนาดให้กระชับ) ---
-            f_title = Font(bold=True, size=16)
-            f_bold = Font(bold=True, size=10)
-            f_norm = Font(size=10)
-            f_white = Font(bold=True, color="FFFFFF", size=10)
+            # --- Styles (Cordia New) ---
+            f_title = Font(name='Cordia New', bold=True, size=18)
+            f_bold = Font(name='Cordia New', bold=True, size=14)
+            f_norm = Font(name='Cordia New', size=14)
+            f_white = Font(name='Cordia New', bold=True, color="FFFFFF", size=14)
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- หัวกระดาษ (Header) ---
+            # --- Header ---
             ws.merge_cells('A1:G1')
             ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
             ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
             ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_norm
             ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_norm
+            
+            # มุมขวา (Zone กลับมาแล้ว)
             ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_bold
+            ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_bold
             ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
+            
             ws['A6'] = f"Customer Name: {customer_name}"; ws['A6'].font = f_bold
             ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
             ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
@@ -94,43 +98,42 @@ def process_excel_to_buffer(uploaded_file):
                     if cell.column in [1, 4, 5, 6, 7]:
                         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            # --- **ส่วนสำคัญ: สั่งให้ย่อส่วนเองโดยอัตโนมัติ (Auto Scaling)** ---
+            # --- **การตั้งค่า Print & Scale** ---
             ws.page_setup.paperSize = 9 # A4
             ws.page_setup.orientation = 'portrait'
             
-            # บังคับให้ข้อมูล "ทุกอย่าง" ลงใน 1 หน้ากระดาษ (ทั้งกว้างและสูง)
-            # ถ้าข้อมูลยาวมากๆ Excel จะย่อ % ของการพิมพ์ลงให้อัตโนมัติครับ
+            # สั่งให้ย่อทุกอย่างลงใน 1 หน้ากระดาษอัตโนมัติ (แม้จะใช้ Cordia New ที่ขนาดใหญ่กว่าปกติ)
             ws.sheet_properties.pageSetUpPr.fitToPage = True
             ws.page_setup.fitToWidth = 1 
             ws.page_setup.fitToHeight = 1 
             
             ws.print_options.horizontalCentered = True
-            ws.page_margins.left = 0.3; ws.page_margins.right = 0.3
+            ws.page_margins.left = 0.25; ws.page_margins.right = 0.25
 
-            # ปรับความกว้างคอลัมน์มาตรฐาน
+            # ปรับความกว้างคอลัมน์
             widths = {'A': 5, 'B': 14, 'C': 35, 'D': 10, 'E': 8, 'F': 8, 'G': 8}
             for col, w in widths.items(): ws.column_dimensions[col].width = w
 
     return output.getvalue(), final_list
 
-# --- UI Layout ---
-st.title("🚚 Delivery Formatter (Auto-Scale A4)")
+# --- Streamlit UI ---
+st.title("🚚 Delivery Formatter (Cordia New + Auto-Scale)")
 
-uploaded_file = st.file_uploader("Upload TestPOD Excel File", type="xlsx")
+uploaded_file = st.file_uploader("Upload Excel File", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('Processing...'):
+    with st.spinner('กำลังประมวลผล...'):
         try:
             excel_bytes, preview_df = process_excel_to_buffer(uploaded_file)
-            st.success("✅ จัดฟอร์แมตสำเร็จ! ตั้งค่า Auto-Scale ให้ย่อลง 1 หน้า A4 อัตโนมัติ")
+            st.success("✅ ประมวลผลสำเร็จ! (ใช้ Cordia New + กู้คืนคำว่า Zone)")
             
             with st.expander("🔍 ดูตัวอย่างข้อมูล (Preview)"):
                 st.dataframe(preview_df[['Branch', 'Item No.', 'Description', 'Qty']], hide_index=True)
             
             st.download_button(
-                label="📥 Download Excel (พร้อมปริ้นท์)",
+                label="📥 Download Excel",
                 data=excel_bytes,
-                file_name=f"Delivery_Note_{datetime.now().strftime('%H%M')}.xlsx",
+                file_name=f"Delivery_Cordia_{datetime.now().strftime('%H%M')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         except Exception as e:
