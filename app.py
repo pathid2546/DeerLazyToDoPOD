@@ -47,13 +47,13 @@ def process_excel_to_buffer(uploaded_file):
             
             # --- Styles (Cordia New) ---
             font_name = 'Cordia New'
-            f_title = Font(name=font_name, bold=True, size=18)
+            f_title = Font(name=font_name, bold=True, size=20)
             f_header = Font(name=font_name, bold=True, size=14)
-            f_data = Font(name=font_name, size=12)
-            f_white = Font(name=font_name, bold=True, color="FFFFFF", size=12)
+            f_data = Font(name=font_name, size=14)
+            f_white = Font(name=font_name, bold=True, color="FFFFFF", size=14)
             
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
-            fill_light = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid") # สีเว้นบรรทัด
+            fill_light = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
             # --- Header ---
@@ -63,6 +63,7 @@ def process_excel_to_buffer(uploaded_file):
             ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
             ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
             
+            # ขวาบน
             ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
             ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_header
             ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
@@ -86,51 +87,60 @@ def process_excel_to_buffer(uploaded_file):
                 for cell in row:
                     cell.border = border
                     cell.font = f_data
-                    if r_idx % 2 == 0: cell.fill = fill_light # สลับสีบรรทัด
+                    if r_idx % 2 == 0: cell.fill = fill_light
                     if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-            # --- Footer (แยกบรรทัด + ตารางสรุปใหม่) ---
-            start_f = ws.max_row + 2
+            # --- ** ส่วนท้าย (FOOTER) - บังคับแยกบรรทัด ** ---
+            # เริ่มต้นบรรทัดใหม่โดยเว้นระยะจากตาราง 1 บรรทัด
+            curr_row = ws.max_row + 2
             
-            # ฝั่งซ้าย
+            # ฝั่งซ้าย: เขียนทีละบรรทัด (ใช้ row + 1, + 2 ไปเรื่อยๆ)
             labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
             for i, label in enumerate(labels):
-                c = ws.cell(row=start_f + i, column=1, value=f"{label} .......................................................")
-                c.font = f_header
+                cell = ws.cell(row=curr_row + i, column=1, value=f"{label} .......................................................")
+                cell.font = f_header
             
-            # ฝั่งขวา (ตารางสรุปเปลี่ยนชื่อตามสั่ง)
+            # ฝั่งขวา: ตารางสรุป (เริ่มบรรทัดเดียวกับ "ผู้รับสินค้า")
+            summary_start_row = curr_row
             summary_headers = ["", "MBL", "BNN"]
             for i, h in enumerate(summary_headers):
-                c = ws.cell(row=start_f, column=5+i, value=h)
+                c = ws.cell(row=summary_start_row, column=5+i, value=h)
                 c.font, c.fill, c.border = f_white, fill_green, border
                 c.alignment = Alignment(horizontal='center')
             
-            # เปลี่ยนคำ: ตะกร้าใหญ่ / ตะกร้าเล็ก
-            summary_rows = ["ตะกร้าใหญ่", "ตะกร้าเล็ก"]
-            for r_idx, label in enumerate(summary_rows, 1):
-                c_label = ws.cell(row=start_f + r_idx, column=5, value=label)
+            # ข้อมูลตารางสรุป: ตะกร้าใหญ่ / ตะกร้าเล็ก
+            summary_data = ["ตะกร้าใหญ่", "ตะกร้าเล็ก"]
+            for i, label in enumerate(summary_data, 1):
+                c_label = ws.cell(row=summary_start_row + i, column=5, value=label)
                 c_label.font, c_label.border = f_header, border
-                ws.cell(row=start_f + r_idx, column=6).border = border
-                ws.cell(row=start_f + r_idx, column=7).border = border
+                ws.cell(row=summary_start_row + i, column=6).border = border
+                ws.cell(row=summary_start_row + i, column=7).border = border
 
-            # Print Settings
+            # --- Settings ---
             ws.page_setup.paperSize = 9 # A4
             ws.sheet_properties.pageSetUpPr.fitToPage = True
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 1
             ws.print_options.horizontalCentered = True
+            ws.page_margins.left = 0.25; ws.page_margins.right = 0.25; ws.page_margins.top = 0.5
             
-            widths = {'A': 6, 'B': 15, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
+            widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
             for col, w in widths.items(): ws.column_dimensions[col].width = w
 
     return output.getvalue()
 
-# UI
-st.title("🚚 Delivery Formatter Pro (Cordia Version)")
-uploaded_file = st.file_uploader("Upload Excel File", type="xlsx")
+# --- UI ---
+st.title("🚚 Delivery Formatter Pro")
+uploaded_file = st.file_uploader("เลือกไฟล์ Excel", type="xlsx")
 
 if uploaded_file:
-    with st.spinner('กำลังปรับแต่งความสวยงาม...'):
+    with st.spinner('กำลังจัดบรรทัดใหม่ให้สวยงาม...'):
         excel_bytes = process_excel_to_buffer(uploaded_file)
-        st.success("✅ ปรับฟอนต์ Cordia, สีเว้นบรรทัด และเปลี่ยนชื่อตะกร้าเรียบร้อยแล้ว!")
-        st.download_button(label="📥 Download Excel ที่ปรับปรุงแล้ว", data=excel_bytes, file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx")
+        st.success("✅ แก้ไขการเว้นบรรทัดส่วนท้าย และปรับขนาดฟอนต์ Cordia New เรียบร้อย!")
+        st.download_button(
+            label="📥 ดาวน์โหลดไฟล์",
+            data=excel_bytes,
+            file_name=f"Delivery_Final_{datetime.now().strftime('%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
