@@ -27,6 +27,7 @@ def process_excel_to_buffer(uploaded_file):
     final_list = df_melted.dropna(subset=['Item No.', 'Qty'])
     final_list = final_list[final_list['Qty'] > 0]
 
+    # วันที่ปัจจุบันสำหรับ Delivery Date
     current_date = datetime.now().strftime('%d/%m/%Y')
     output = io.BytesIO()
     
@@ -35,7 +36,7 @@ def process_excel_to_buffer(uploaded_file):
             store_code = branch_to_code.get(str(branch_name).strip(), "")
             sheet_name = str(branch_name)[:30].replace('/', '-').replace(':', '')
             
-            # เริ่มเขียนข้อมูลสินค้าที่แถว 11
+            # เตรียมข้อมูลสินค้า (เริ่มแถว 11)
             items_df = pd.DataFrame({
                 'No': range(1, len(branch_data) + 1),
                 'Code': branch_data['Item No.'],
@@ -49,33 +50,33 @@ def process_excel_to_buffer(uploaded_file):
             ws = writer.sheets[sheet_name]
             
             # --- Styles ---
-            f_title = Font(name='Sarabun', bold=True, size=14)
+            f_title = Font(name='Sarabun', bold=True, size=16)
             f_bold = Font(name='Sarabun', bold=True, size=9)
             f_norm = Font(name='Sarabun', size=9)
             f_white = Font(name='Sarabun', bold=True, color="FFFFFF", size=9)
             fill_green = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
             border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-            # --- ส่วนหัวกระดาษ (ตามรูปแบบรูปที่ 2) ---
+            # --- หัวกระดาษ (อ้างอิงจากรูปที่ 2) ---
             ws.merge_cells('A1:G1')
-            ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = Font(bold=True, size=16); ws['A1'].alignment = Alignment(horizontal='center')
+            ws['A1'] = "ใบส่งสินค้าชั่วคราว"; ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
             
-            # ข้อมูลบริษัท (ฝั่งซ้าย)
+            # ฝั่งซ้าย: ข้อมูลบริษัท
             ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_bold
             ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_norm
             ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_norm
             
-            # รายละเอียด (ฝั่งขวา)
+            # ฝั่งขวา: วันที่และ Delivery Date (เอาวันปัจจุบันมา)
             ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_bold
             ws['G3'] = "Zone: "; ws['G3'].alignment = Alignment(horizontal='right'); ws['G3'].font = f_bold
-            ws['G4'] = f"Ref No: POD-{datetime.now().strftime('%m%d')}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
+            ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_bold
 
             # ข้อมูลลูกค้า
             ws['A6'] = f"Customer Name: {customer_name}"; ws['A6'].font = f_bold
             ws['A7'] = f"Store Code: {store_code}"; ws['A7'].font = f_bold
             ws['C7'] = f"Store Name: {branch_name}"; ws['C7'].font = f_bold
 
-            # --- จัดการหัวตาราง Qty (แถว 9-10) ---
+            # --- หัวตาราง Qty (แถว 9-10) ---
             ws.merge_cells('E9:G9')
             ws['E9'] = "Qty"; ws['E9'].alignment = Alignment(horizontal='center', vertical='center')
             ws['E9'].font = f_white; ws['E9'].fill = fill_green; ws['E9'].border = border
@@ -85,7 +86,7 @@ def process_excel_to_buffer(uploaded_file):
                 cell = ws.cell(row=10, column=i, value=h)
                 cell.font, cell.fill, cell.border = f_white, fill_green, border
                 cell.alignment = Alignment(horizontal='center')
-                if i <= 4: # Merge แนวตั้ง No, Code, Name, Unit
+                if i <= 4: # Merge No, Code, Name, Unit แนวตั้ง
                     ws.merge_cells(start_row=9, start_column=i, end_row=10, end_column=i)
                     ws.cell(row=9, column=i, value=h).alignment = Alignment(horizontal='center', vertical='center')
                     ws.cell(row=9, column=i).font, ws.cell(row=9, column=i).fill, ws.cell(row=9, column=i).border = f_white, fill_green, border
@@ -101,28 +102,28 @@ def process_excel_to_buffer(uploaded_file):
             ws.cell(row=f_row, column=1, value="ลงชื่อ ......................................... ผู้ส่งสินค้า").font = f_norm
             ws.cell(row=f_row, column=5, value="ลงชื่อ ......................................... ผู้ตรวจสอบ").font = f_norm
 
-            # --- ตั้งค่าหน้ากระดาษ A4 (ไม่ให้ล้นเส้นประ) ---
-            ws.page_setup.paperSize = 9 # A4
+            # --- ตั้งค่า A4 ---
+            ws.page_setup.paperSize = 9 
             ws.page_setup.orientation = 'portrait'
-            ws.page_setup.fitToWidth = 1 # บีบให้พอดีหน้า
+            ws.page_setup.fitToWidth = 1 
             ws.page_setup.fitToHeight = 0
             
-            # ปรับความกว้างให้สมดุล (A4 แนวตั้งรวมกันควรอยู่ประมาณ 70-75)
+            # ปรับความกว้างคอลัมน์ (คุมให้อยู่ในหน้าเดียว)
             widths = {'A': 4.5, 'B': 13, 'C': 32, 'D': 8, 'E': 8, 'F': 8, 'G': 8}
             for col, w in widths.items(): ws.column_dimensions[col].width = w
             
-            ws.page_margins.left = 0.2; ws.page_margins.right = 0.2
+            ws.page_margins.left = 0.25; ws.page_margins.right = 0.25
 
     return output.getvalue()
 
 # Streamlit UI
-st.title("🚚 Delivery Generator (Full Header A4)")
+st.title("🚚 Delivery Generator (Fix Delivery Date)")
 file = st.file_uploader("Upload Excel", type="xlsx")
 
 if file:
     try:
         excel_bytes = process_excel_to_buffer(file)
-        st.success("ประมวลผลสำเร็จ! หัวกระดาษมาครบและ Qty อยู่ตรงกลางเรียบร้อย")
-        st.download_button("📥 Download Excel", excel_bytes, "delivery_full_header.xlsx")
+        st.success("ประมวลผลสำเร็จ! เปลี่ยน Ref No เป็น Delivery Date แล้ว")
+        st.download_button("📥 Download Excel", excel_bytes, f"delivery_{datetime.now().strftime('%d%m')}.xlsx")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
