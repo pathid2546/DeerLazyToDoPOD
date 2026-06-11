@@ -317,7 +317,7 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
 
 
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 3: ใบจัด Uniform (ฟอร์มใหม่ 2 คอลัมน์ A4 รายสาขา)
+# ฟังก์ชันสำหรับ Tab 3: ใบจัด Uniform (ฟอร์มใหม่ 3 คอลัมน์ A4 รายสาขา)
 # =======================================================
 def process_excel_packing(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -353,18 +353,20 @@ def process_excel_packing(uploaded_file):
     df = df[valid_columns]
     df.columns = [str(c).strip() for c in df.columns]
 
-    id_cols = []
+    # ดึงคอลัมน์ Item No, Description, Unit ให้ชัวร์
+    item_col = df.columns[0]
+    desc_col = None
+    unit_col = None
     for col in df.columns:
-        if 'Item No.' in col or 'รหัสสินค้า' in col: pass
-        elif 'Description' in col or 'ชื่อสินค้า' in col: id_cols.append(col)
-        elif 'UNIT' in col or 'หน่วย' in col: pass
+        if 'Description' in col or 'ชื่อสินค้า' in col: desc_col = col
+        elif 'UNIT' in col or 'หน่วย' in col: unit_col = col
     
-    # เผื่อหาไม่เจอ ล็อคคอลัมน์ที่ 2 (ชื่อสินค้า)
-    if len(id_cols) == 0: id_cols.append(df.columns[1]) 
+    if not desc_col: desc_col = df.columns[1] if len(df.columns) > 1 else item_col
+    if not unit_col: unit_col = df.columns[2] if len(df.columns) > 2 else item_col
 
-    df_melted = df.melt(id_vars=[df.columns[0], id_cols[0]], var_name='Branch', value_name='Qty')
+    df_melted = df.melt(id_vars=[item_col, desc_col, unit_col], var_name='Branch', value_name='Qty')
     df_melted['Qty'] = pd.to_numeric(df_melted['Qty'], errors='coerce')
-    final_list = df_melted.dropna(subset=[df.columns[0], 'Qty']).query('Qty > 0')
+    final_list = df_melted.dropna(subset=[item_col, 'Qty']).query('Qty > 0')
     final_list = final_list[~final_list['Branch'].astype(str).str.contains('Unnamed|#|nan|รวม', na=False)]
 
     current_date = datetime.now().strftime('%d/%m/%Y')
@@ -375,13 +377,13 @@ def process_excel_packing(uploaded_file):
             s_branch = str(branch_name)
             clean_sheet_name = "".join([c for c in s_branch if c.isalnum() or c in ' -_ก-๙'])[:30]
             
-            # ทำตารางแค่ 2 คอลัมน์หลักตามบรีฟแม่เลยค่ะ
+            # ทำตาราง 3 คอลัมน์ [รายการสินค้า, หน่วย, จำนวน]
             items_df = pd.DataFrame({
-                'รายการสินค้า': branch_data[id_cols[0]],
+                'รายการสินค้า': branch_data[desc_col],
+                'หน่วย': branch_data[unit_col],
                 'จำนวน': branch_data['Qty']
             })
             
-            # เว้นแถวด้านบนไว้ทำหัวกระดาษตัวโตๆ
             items_df.to_excel(writer, sheet_name=clean_sheet_name, index=False, header=False, startrow=5)
             apply_styles_packing(writer.sheets[clean_sheet_name], s_branch, current_date)
 
@@ -390,65 +392,73 @@ def process_excel_packing(uploaded_file):
 def apply_styles_packing(ws, branch_name, current_date):
     font_name = 'Cordia New'
     
-    # สไตล์หัวกระดาษตัวโตๆ เด่นๆ ตามบรีฟแม่เลยค่ะ
-    f_branch_title = Font(name=font_name, bold=True, size=26, color="000000") # ชื่อสาขาตัวใหญ่ยักษ์
-    f_normal_header = Font(name=font_name, size=14, color="555555") # ตัวหนังสือขนาดปกติบรรทัดใหม่
-    
+    # สไตล์หัวกระดาษตัวโตๆ ตามบรีฟแม่
+    f_branch_title = Font(name=font_name, bold=True, size=26, color="000000") 
+    f_normal_header = Font(name=font_name, size=14, color="555555") 
     f_table_header = Font(name=font_name, bold=True, size=15, color="000000")
     f_data = Font(name=font_name, size=15)
     
     fill_light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    # แถวที่ 1: ชื่อสาขาตัวใหญ่ยักษ์เด่นๆ 
-    ws.merge_cells('A1:B1')
-    ws['A1'] = f"ใบจัดสินค้ายูนิฟอร์ม - {branch_name}"
+    # แถวที่ 1: โชว์แค่ชื่อสาขาตัวใหญ่ยักษ์เด่นๆ (A-C)
+    ws.merge_cells('A1:C1')
+    ws['A1'] = branch_name
     ws['A1'].font = f_branch_title
     ws['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[1].height = 40
 
-    # แถวที่ 2: ขึ้นบรรทัดใหม่เป็นตัวหนังสือขนาดปกติ
-    ws.merge_cells('A2:B2')
-    ws['A2'] = f"วันที่จัดทำพิมพ์ฟอร์ม: {current_date}  |  สำหรับแผนกคลังสินค้าและแพ็คสินค้า"
+    # แถวที่ 2: โชว์แค่วันที่จัดพิมพ์
+    ws.merge_cells('A2:C2')
+    ws['A2'] = f"วันที่จัดทำพิมพ์ฟอร์ม: {current_date}"
     ws['A2'].font = f_normal_header
     ws['A2'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[2].height = 20
 
-    # แถวที่ 5: หัวตาราง 2 คอลัมน์ [รายการสินค้า] และ [จำนวน]
+    # แถวที่ 5: หัวตาราง 3 คอลัมน์
     ws['A5'] = "รายการสินค้า"
-    ws['B5'] = "จำนวน"
+    ws['B5'] = "หน่วย"
+    ws['C5'] = "จำนวน"
     
-    for col_letter in ['A', 'B']:
+    for col_letter in ['A', 'B', 'C']:
         cell = ws[f'{col_letter}5']
         cell.font = f_table_header
         cell.fill = fill_light_gray
         cell.border = border_thin
-        cell.alignment = Alignment(horizontal='center' if col_letter == 'B' else 'left', vertical='center')
+        # ให้ช่อง B(หน่วย) กับ C(จำนวน) อยู่ตรงกลาง 
+        align_pos = 'center' if col_letter in ['B', 'C'] else 'left'
+        cell.alignment = Alignment(horizontal=align_pos, vertical='center')
     ws.row_dimensions[5].height = 25
 
     # จัดการเส้นขอบและฟอนต์ให้กับข้อมูลในตาราง
-    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, min_col=1, max_col=2):
+    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, min_col=1, max_col=3):
         ws.row_dimensions[row[0].row].height = 24
         
-        # คอลัมน์รายการสินค้า
+        # คอลัมน์ A: รายการสินค้า
         row[0].font = f_data
         row[0].border = border_thin
         row[0].alignment = Alignment(horizontal='left', vertical='center')
         
-        # คอลัมน์จำนวน
-        row[1].font = Font(name=font_name, bold=True, size=15)
+        # คอลัมน์ B: หน่วย
+        row[1].font = f_data
         row[1].border = border_thin
         row[1].alignment = Alignment(horizontal='center', vertical='center')
+        
+        # คอลัมน์ C: จำนวน
+        row[2].font = Font(name=font_name, bold=True, size=15)
+        row[2].border = border_thin
+        row[2].alignment = Alignment(horizontal='center', vertical='center')
 
-    # ตั้งค่าหน้ากระดาษให้ตัดพอดี A4 ต่อสาขา
-    ws.page_setup.paperSize = 9 # A4
+    # ตั้งค่าหน้ากระดาษให้ตัดพอดี A4
+    ws.page_setup.paperSize = 9 
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0 # ปล่อยยาวลงมาได้ถ้าของเยอะ แต่ความกว้างไม่ให้หลุดหน้า A4
+    ws.page_setup.fitToHeight = 0 
     
-    # กำหนดความกว้างคอลัมน์ให้บาลานซ์กับกระดาษ A4 (รวมแล้วกว้างพอดีหน้า)
-    ws.column_dimensions['A'].width = 55 # รายการสินค้ากว้างสะใจ อ่านง่าย
-    ws.column_dimensions['B'].width = 15 # ช่องจำนวนกว้างพอดีสวยๆ
+    # กำหนดความกว้าง 3 คอลัมน์ ให้รวมกันพอดีหน้า A4 สวยๆ
+    ws.column_dimensions['A'].width = 50 
+    ws.column_dimensions['B'].width = 10 
+    ws.column_dimensions['C'].width = 15
 
 
 # =======================================================
@@ -456,7 +466,7 @@ def apply_styles_packing(ws, branch_name, current_date):
 # =======================================================
 st.title("🚚 | Delivery Formatter Pro | 🚚")
 
-# สร้าง 3 Tab บนหน้าเว็บตามบรีฟล่าสุดของแม่เลยค่ะ
+# สร้าง 3 Tab บนหน้าเว็บ
 tab1, tab2, tab3 = st.tabs([
     "📦 ระบบใบส่งสินค้า (แบบเดิม)", 
     "👕 Tab เบิก Uniform", 
@@ -506,14 +516,14 @@ with tab2:
 # --- การทำงานใน Tab 3 (ออกใบจัด Uniform ฟอร์มใหม่ล้างบาง!) ---
 with tab3:
     st.subheader("📋 ออกใบจัด Uniform (ล้างฟอร์มใหม่)")
-    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **2 คอลัมน์ (รายการ/จำนวน)** แยกหน้า **A4 รายสาขา** หัวกระดาษชื่อสาขา**ตัวหนาขนาดใหญ่**")
+    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **3 คอลัมน์ (รายการ/หน่วย/จำนวน)** แยกหน้า **A4 รายสาขา** หัวกระดาษชื่อสาขา**ตัวหนาขนาดใหญ่**")
     
     file_pack = st.file_uploader("Upload Excel สำหรับออกใบจัดสินค้า", type="xlsx", key="pack")
     if file_pack:
         with st.spinner('กำลังดีไซน์ฟอร์มจัดแพ็คสินค้าใหม่อยู่นะคะแม่...'):
             try:
                 excel_bytes_pack = process_excel_packing(file_pack)
-                st.success("💅🏻 กริบมากแม่! ฟอร์ม 2 คอลัมน์ หัวสาขาตัวโต พร้อมสั่งพิมพ์สับๆ เลยค่ะ")
+                st.success("💅🏻 กริบมากแม่! ฟอร์ม 3 คอลัมน์ หัวสาขาเดี่ยวๆ พร้อมสั่งพิมพ์สับๆ เลยค่ะ")
                 st.download_button(
                     label="📥 ดาวน์โหลดใบจัดยูนิฟอร์ม (ฟอร์มใหม่)", 
                     data=excel_bytes_pack, 
