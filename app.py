@@ -8,10 +8,35 @@ from datetime import datetime
 st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 
 # =======================================================
+# ฟังก์ชันช่วยดึงวันที่จากคำว่า "รอบส่ง" ในไฟล์ Excel
+# =======================================================
+def extract_delivery_date(raw_df):
+    # ค่าเริ่มต้นคือวันที่ปัจจุบัน เผื่อในไฟล์ไม่มีคำว่ารอบส่ง
+    delivery_date = datetime.now().strftime('%d/%m/%Y')
+    
+    # ค้นหาใน 10 แถวแรกของไฟล์
+    for i, row in raw_df.head(10).iterrows():
+        for j, val in enumerate(row.values):
+            if str(val).strip() == 'รอบส่ง':
+                # วันที่จะต้องอยู่คอลัมน์ถัดไป
+                if j + 1 < len(row.values):
+                    raw_date = row.values[j + 1]
+                    if pd.notna(raw_date) and str(raw_date).strip() != '':
+                        try:
+                            # แปลงฟอร์แมตวันที่ให้ออกมาเป็น DD/MM/YYYY สวยๆ
+                            parsed = pd.to_datetime(raw_date)
+                            return parsed.strftime('%d/%m/%Y')
+                        except:
+                            # ถ้าแปลงไม่ได้ให้ดึงข้อความดิบๆ มาเลย
+                            return str(raw_date).strip()
+    return delivery_date
+
+# =======================================================
 # ฟังก์ชันสำหรับ Tab 1: ระบบเดิม (อิงตามโค้ดต้นฉบับ 100%)
 # =======================================================
 def process_excel_original(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
+    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
     
     header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in [str(v) for v in row.values])
     header_row_raw = raw_df.iloc[header_row_index].fillna("").astype(str).str.strip().tolist()
@@ -40,9 +65,7 @@ def process_excel_original(uploaded_file):
     final_list = df_melted.dropna(subset=['Item No.', 'Qty']).query('Qty > 0')
     final_list = final_list[~final_list['Branch'].astype(str).str.contains('Unnamed|#|nan', na=False)]
 
-    current_date = datetime.now().strftime('%d/%m/%Y')
     output = io.BytesIO()
-    
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for branch_name, branch_data in final_list.groupby('Branch', sort=False):
             s_branch = str(branch_name)
@@ -83,7 +106,6 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
     f_title = Font(name=font_name, bold=True, size=20)
     f_header = Font(name=font_name, bold=True, size=14)
     f_data = Font(name=font_name, size=14)
-    
     f_black_bold = Font(name=font_name, bold=True, color="000000", size=14) 
     fill_light_green = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid") 
     fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid") 
@@ -95,10 +117,8 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
     ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
     ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
     ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
-    
     ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
     ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
-    
     ws['A7'] = f"Code: {store_code}"; ws['C7'] = f"Name: {branch_name}"
     ws['A7'].font = ws['C7'].font = f_header
 
@@ -144,12 +164,12 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
     widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
-
 # =======================================================
 # ฟังก์ชันสำหรับ Tab 2: ระบบเบิก Uniform (มีตารางเซ็นแบบกล่อง)
 # =======================================================
 def process_excel_uniform(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
+    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
     
     header_row_index = -1
     for i, row in raw_df.iterrows():
@@ -194,9 +214,7 @@ def process_excel_uniform(uploaded_file):
     final_list = df_melted.dropna(subset=[id_cols[0], 'Qty']).query('Qty > 0')
     final_list = final_list[~final_list['Branch'].astype(str).str.contains('Unnamed|#|nan|รวม', na=False)]
 
-    current_date = datetime.now().strftime('%d/%m/%Y')
     output = io.BytesIO()
-    
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for branch_name, branch_data in final_list.groupby('Branch', sort=False):
             s_branch = str(branch_name)
@@ -236,7 +254,6 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
     f_title = Font(name=font_name, bold=True, size=20)
     f_header = Font(name=font_name, bold=True, size=14)
     f_data = Font(name=font_name, size=14)
-    
     f_black_bold = Font(name=font_name, bold=True, color="000000", size=14) 
     fill_light_green = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid") 
     fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid") 
@@ -248,10 +265,8 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
     ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
     ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
     ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
-    
     ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
     ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
-    
     ws['A7'] = "Code: ALL" if is_summary else "Code: "
     ws['C7'] = f"Name: {branch_name}"
     ws['A7'].font = ws['C7'].font = f_header
@@ -315,12 +330,12 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
     widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
-
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 3: ใบจัด Uniform (ฟอร์มใหม่ 3 คอลัมน์ A4 รายสาขา)
+# ฟังก์ชันสำหรับ Tab 3: ใบจัด Uniform (ฟอร์มใหม่ 4 คอลัมน์ A4 รายสาขา)
 # =======================================================
 def process_excel_packing(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
+    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
     
     header_row_index = -1
     for i, row in raw_df.iterrows():
@@ -353,10 +368,11 @@ def process_excel_packing(uploaded_file):
     df = df[valid_columns]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # ดึงคอลัมน์ Item No, Description, Unit ให้ชัวร์
+    # ดึงคอลัมน์ รหัสสินค้า, รายการสินค้า, หน่วย ให้ชัวร์
     item_col = df.columns[0]
     desc_col = None
     unit_col = None
+    
     for col in df.columns:
         if 'Description' in col or 'ชื่อสินค้า' in col: desc_col = col
         elif 'UNIT' in col or 'หน่วย' in col: unit_col = col
@@ -369,16 +385,15 @@ def process_excel_packing(uploaded_file):
     final_list = df_melted.dropna(subset=[item_col, 'Qty']).query('Qty > 0')
     final_list = final_list[~final_list['Branch'].astype(str).str.contains('Unnamed|#|nan|รวม', na=False)]
 
-    current_date = datetime.now().strftime('%d/%m/%Y')
     output = io.BytesIO()
-    
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for branch_name, branch_data in final_list.groupby('Branch', sort=False):
             s_branch = str(branch_name)
             clean_sheet_name = "".join([c for c in s_branch if c.isalnum() or c in ' -_ก-๙'])[:30]
             
-            # ทำตาราง 3 คอลัมน์ [รายการสินค้า, หน่วย, จำนวน]
+            # ทำตาราง 4 คอลัมน์ [รหัสสินค้า, รายการสินค้า, หน่วย, จำนวน]
             items_df = pd.DataFrame({
+                'รหัสสินค้า': branch_data[item_col],
                 'รายการสินค้า': branch_data[desc_col],
                 'หน่วย': branch_data[unit_col],
                 'จำนวน': branch_data['Qty']
@@ -392,7 +407,6 @@ def process_excel_packing(uploaded_file):
 def apply_styles_packing(ws, branch_name, current_date):
     font_name = 'Cordia New'
     
-    # สไตล์หัวกระดาษตัวโตๆ ตามบรีฟแม่
     f_branch_title = Font(name=font_name, bold=True, size=26, color="000000") 
     f_normal_header = Font(name=font_name, size=14, color="555555") 
     f_table_header = Font(name=font_name, bold=True, size=15, color="000000")
@@ -401,79 +415,83 @@ def apply_styles_packing(ws, branch_name, current_date):
     fill_light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    # แถวที่ 1: โชว์แค่ชื่อสาขาตัวใหญ่ยักษ์เด่นๆ (A-C)
-    ws.merge_cells('A1:C1')
+    # แถวที่ 1: โชว์แค่ชื่อสาขาเพียวๆ ตัวใหญ่ยักษ์ (ลากคลุม 4 คอลัมน์ A-D)
+    ws.merge_cells('A1:D1')
     ws['A1'] = branch_name
     ws['A1'].font = f_branch_title
     ws['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[1].height = 40
 
     # แถวที่ 2: โชว์แค่วันที่จัดพิมพ์
-    ws.merge_cells('A2:C2')
+    ws.merge_cells('A2:D2')
     ws['A2'] = f"วันที่จัดทำพิมพ์ฟอร์ม: {current_date}"
     ws['A2'].font = f_normal_header
     ws['A2'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[2].height = 20
 
-    # แถวที่ 5: หัวตาราง 3 คอลัมน์
-    ws['A5'] = "รายการสินค้า"
-    ws['B5'] = "หน่วย"
-    ws['C5'] = "จำนวน"
+    # แถวที่ 5: หัวตาราง 4 คอลัมน์
+    ws['A5'] = "รหัสสินค้า"
+    ws['B5'] = "รายการสินค้า"
+    ws['C5'] = "หน่วย"
+    ws['D5'] = "จำนวน"
     
-    for col_letter in ['A', 'B', 'C']:
+    for col_letter in ['A', 'B', 'C', 'D']:
         cell = ws[f'{col_letter}5']
         cell.font = f_table_header
         cell.fill = fill_light_gray
         cell.border = border_thin
-        # ให้ช่อง B(หน่วย) กับ C(จำนวน) อยู่ตรงกลาง 
-        align_pos = 'center' if col_letter in ['B', 'C'] else 'left'
+        # A, B ชิดซ้าย | C, D ไว้ตรงกลาง
+        align_pos = 'center' if col_letter in ['C', 'D'] else 'left'
         cell.alignment = Alignment(horizontal=align_pos, vertical='center')
     ws.row_dimensions[5].height = 25
 
     # จัดการเส้นขอบและฟอนต์ให้กับข้อมูลในตาราง
-    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, min_col=1, max_col=3):
+    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, min_col=1, max_col=4):
         ws.row_dimensions[row[0].row].height = 24
         
-        # คอลัมน์ A: รายการสินค้า
+        # A: รหัสสินค้า
         row[0].font = f_data
         row[0].border = border_thin
         row[0].alignment = Alignment(horizontal='left', vertical='center')
         
-        # คอลัมน์ B: หน่วย
+        # B: รายการสินค้า
         row[1].font = f_data
         row[1].border = border_thin
-        row[1].alignment = Alignment(horizontal='center', vertical='center')
+        row[1].alignment = Alignment(horizontal='left', vertical='center')
         
-        # คอลัมน์ C: จำนวน
-        row[2].font = Font(name=font_name, bold=True, size=15)
+        # C: หน่วย
+        row[2].font = f_data
         row[2].border = border_thin
         row[2].alignment = Alignment(horizontal='center', vertical='center')
+        
+        # D: จำนวน
+        row[3].font = Font(name=font_name, bold=True, size=15)
+        row[3].border = border_thin
+        row[3].alignment = Alignment(horizontal='center', vertical='center')
 
-    # ตั้งค่าหน้ากระดาษให้ตัดพอดี A4
-    ws.page_setup.paperSize = 9 
+    # ตั้งค่าหน้ากระดาษให้ฟิก A4 (บีบความกว้างให้พอดี 1 หน้า)
+    ws.page_setup.paperSize = 9 # กระดาษ A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0 
+    ws.page_setup.fitToWidth = 1 # ฟิกความกว้างให้พอดี 1 หน้า
+    ws.page_setup.fitToHeight = 0 # ปล่อยความยาวให้ไหลได้
     
-    # กำหนดความกว้าง 3 คอลัมน์ ให้รวมกันพอดีหน้า A4 สวยๆ
-    ws.column_dimensions['A'].width = 50 
-    ws.column_dimensions['B'].width = 10 
-    ws.column_dimensions['C'].width = 15
-
+    # กำหนดความกว้าง 4 คอลัมน์ ให้รวมกันพอดีหน้า A4 (กะสัดส่วนให้สวยงาม)
+    ws.column_dimensions['A'].width = 16 # รหัสสินค้า
+    ws.column_dimensions['B'].width = 45 # รายการสินค้า (กว้างสุด)
+    ws.column_dimensions['C'].width = 10 # หน่วย
+    ws.column_dimensions['D'].width = 12 # จำนวน
 
 # =======================================================
 # หน้าจอ UI ของระบบ (Streamlit)
 # =======================================================
 st.title("🚚 | Delivery Formatter Pro | 🚚")
 
-# สร้าง 3 Tab บนหน้าเว็บ
 tab1, tab2, tab3 = st.tabs([
     "📦 ระบบใบส่งสินค้า (แบบเดิม)", 
     "👕 Tab เบิก Uniform", 
     "📋 ออกใบจัด Uniform (ฟอร์มใหม่ A4)"
 ])
 
-# --- การทำงานใน Tab 1 (ระบบเดิม) ---
 with tab1:
     st.subheader("📦 จัดการใบส่งสินค้า (POD BNN)")
     st.write("ระบบนี้จะใช้โครงสร้างตาราง **แบบเดิม 100%** (มีตารางตะกร้าและลายเซ็นแบบเดิม โครงสร้างสรุป Summary_All)")
@@ -493,7 +511,6 @@ with tab1:
             except Exception as e:
                 st.error(f"อุ๊ย! ผิดพลาดนิดหน่อยค่ะแม่: {e}")
 
-# --- การทำงานใน Tab 2 (ระบบ Uniform) ---
 with tab2:
     st.subheader("👕 จัดการใบเบิก Uniform")
     st.write("ระบบนี้จะเปลี่ยนชื่อชีทสรุปเป็น **เบิก Uniform** และเปลี่ยนส่วนเซ็นชื่อท้ายกระดาษเป็น **ตารางบันทึกกล่อง Grid Box**")
@@ -513,17 +530,16 @@ with tab2:
             except Exception as e:
                 st.error(f"อุ๊ย! ผิดพลาดนิดหน่อยค่ะแม่: {e}")
 
-# --- การทำงานใน Tab 3 (ออกใบจัด Uniform ฟอร์มใหม่ล้างบาง!) ---
 with tab3:
     st.subheader("📋 ออกใบจัด Uniform (ล้างฟอร์มใหม่)")
-    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **3 คอลัมน์ (รายการ/หน่วย/จำนวน)** แยกหน้า **A4 รายสาขา** หัวกระดาษชื่อสาขา**ตัวหนาขนาดใหญ่**")
+    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **4 คอลัมน์ (รหัส/รายการ/หน่วย/จำนวน)** แยกหน้า **A4 รายสาขา**")
     
     file_pack = st.file_uploader("Upload Excel สำหรับออกใบจัดสินค้า", type="xlsx", key="pack")
     if file_pack:
         with st.spinner('กำลังดีไซน์ฟอร์มจัดแพ็คสินค้าใหม่อยู่นะคะแม่...'):
             try:
                 excel_bytes_pack = process_excel_packing(file_pack)
-                st.success("💅🏻 กริบมากแม่! ฟอร์ม 3 คอลัมน์ หัวสาขาเดี่ยวๆ พร้อมสั่งพิมพ์สับๆ เลยค่ะ")
+                st.success("💅🏻 กริบมากแม่! ฟอร์ม 4 คอลัมน์ หัวสาขาเดี่ยวๆ พร้อมสั่งพิมพ์สับๆ เลยค่ะ")
                 st.download_button(
                     label="📥 ดาวน์โหลดใบจัดยูนิฟอร์ม (ฟอร์มใหม่)", 
                     data=excel_bytes_pack, 
