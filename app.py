@@ -1,162 +1,352 @@
-import streamlit as st
-import pandas as pd
-import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚚 | POD BNN - Uniform Edition | 🚚</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f6;
+            color: #31333F;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #1E293B; }
+        .upload-area {
+            border: 2px dashed #10B981;
+            border-radius: 10px;
+            padding: 2rem;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+            background-color: #f0fDF4;
+            transition: 0.3s;
+            display: block;
+        }
+        .upload-area:hover { background-color: #DCFCE7; }
+        input[type="file"] { display: none; }
+        .btn-download {
+            background-color: #10B981;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+            width: 100%;
+            margin-top: 1rem;
+            transition: 0.2s;
+        }
+        .btn-download:hover { background-color: #059669; }
+        .status { margin-top: 1rem; font-weight: bold; color: #4B5563; }
+        .spinner {
+            display: none;
+            border: 4px solid #E5E7EB;
+            border-top: 4px solid #10B981;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            animation: spin 1s linear infinite;
+            margin: 15px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
 
-st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
+<div class="container">
+    <h1>🚚 | POD BNN - Uniform Edition | 🚚</h1>
+    
+    <label class="upload-area" id="drop-area">
+        <input type="file" id="file-upload" accept=".xlsx" />
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">👕</div>
+        <p>ลากไฟล์มาวางตรงนี้ หรือ <b>คลิกเพื่ออัปโหลด Excel</b></p>
+    </label>
 
-def process_excel_to_buffer(uploaded_file):
-    raw_df = pd.read_excel(uploaded_file, header=None)
-    
-    header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in [str(v) for v in row.values])
-    
-    header_row_raw = raw_df.iloc[header_row_index].fillna("").astype(str).str.strip().tolist()
-    code_row_raw = raw_df.iloc[header_row_index + 1].tolist()
-    
-    branch_to_code = {}
-    for name, code in zip(header_row_raw, code_row_raw):
-        s_name = str(name)
-        if s_name and s_name != 'nan' and 'Unnamed' not in s_name and s_name != "":
-            branch_to_code[s_name] = str(code) if pd.notna(code) else ""
+    <div class="spinner" id="spinner"></div>
+    <div class="status" id="status-text"></div>
+    <button class="btn-download" id="btn-download">📥 โหลดไฟล์เวอร์ชันปริ้นท์ตรงนี้ค่ะแม่</button>
+</div>
 
-    df = pd.read_excel(uploaded_file, header=header_row_index)
-    df = df.iloc[1:].reset_index(drop=True)
-    
-    valid_columns = []
-    for col in df.columns:
-        s_col = str(col)
-        if 'Unnamed' not in s_col and s_col != 'nan':
-            valid_columns.append(col)
-    df = df[valid_columns]
-    df.columns = [str(c).strip() for c in df.columns]
+<script>
+    document.getElementById('file-upload').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    id_cols = ['Item No.', 'Description', 'UNIT']
-    df_melted = df.melt(id_vars=id_cols, var_name='Branch', value_name='Qty')
-    df_melted['Qty'] = pd.to_numeric(df_melted['Qty'], errors='coerce')
-    final_list = df_melted.dropna(subset=['Item No.', 'Qty']).query('Qty > 0')
-    final_list = final_list[~final_list['Branch'].astype(str).str.contains('Unnamed|#|nan', na=False)]
+        const spinner = document.getElementById('spinner');
+        const statusText = document.getElementById('status-text');
+        const btnDownload = document.getElementById('btn-download');
 
-    current_date = datetime.now().strftime('%d/%m/%Y')
-    output = io.BytesIO()
-    
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        for branch_name, branch_data in final_list.groupby('Branch', sort=False):
-            s_branch = str(branch_name)
-            store_code = branch_to_code.get(s_branch.strip(), "")
-            clean_sheet_name = "".join([c for c in s_branch if c.isalnum() or c in ' -_'])[:30]
+        spinner.style.display = 'block';
+        statusText.innerHTML = 'กำลังจัดฟอร์มและสร้าง Tab เบิก Uniform ให้อยู่นะคะแม่...';
+        btnDownload.style.display = 'none';
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const readWb = new ExcelJS.Workbook();
+            await readWb.xlsx.load(arrayBuffer);
+            const rawSheet = readWb.worksheets[0];
+
+            let headerRowIndex = -1;
+            let colIndices = { itemNo: 1, description: 2, unit: 3 };
+
+            // 1. ค้นหาแถวที่เป็นหัวตาราง (รองรับทั้ง ไทย/อังกฤษ)
+            for (let r = 1; r <= rawSheet.rowCount; r++) {
+                let row = rawSheet.getRow(r);
+                let isHeader = false;
+                
+                for (let c = 1; c <= row.cellCount; c++) {
+                    let cellVal = String(row.getCell(c).value || '');
+                    if (cellVal.includes('Item No.') || cellVal.includes('รหัสสินค้า')) {
+                        isHeader = true;
+                        break;
+                    }
+                }
+                
+                if (isHeader) {
+                    headerRowIndex = r;
+                    for (let c = 1; c <= row.cellCount; c++) {
+                        let cellVal = String(row.getCell(c).value || '').trim();
+                        if (cellVal.includes('Item No.') || cellVal.includes('รหัสสินค้า')) colIndices.itemNo = c;
+                        if (cellVal.includes('Description') || cellVal.includes('ชื่อสินค้า')) colIndices.description = c;
+                        if (cellVal.includes('UNIT') || cellVal.includes('หน่วย')) colIndices.unit = c;
+                    }
+                    break;
+                }
+            }
+
+            if (headerRowIndex === -1) throw new Error("ไม่พบคอลัมน์รหัสสินค้าหรือ Item No. ในไฟล์ค่ะ");
+
+            const headerRow = rawSheet.getRow(headerRowIndex);
+            const nextRow = rawSheet.getRow(headerRowIndex + 1);
+            const nextRowFirstCell = String(nextRow.getCell(colIndices.itemNo).value || '').trim();
+
+            // ตรวจสอบว่าแถวถัดไปเป็นข้อมูลเลย (แบบไฟล์แบน) หรือเป็นรหัสสาขา
+            let isNextRowData = false;
+            if (nextRowFirstCell !== '' && nextRowFirstCell !== 'null' && !nextRowFirstCell.includes('Unnamed')) {
+                if (nextRowFirstCell.startsWith('EX') || nextRowFirstCell.match(/[A-Za-z0-9]+/)) {
+                    isNextRowData = true;
+                }
+            }
+
+            // 2. ดึงข้อมูลรายชื่อสาขาและรหัสสาขา (ถ้ามี)
+            const branchToCode = {};
+            const branchCols = [];
+            let maxIdCol = Math.max(colIndices.itemNo, colIndices.description, colIndices.unit);
             
-            items_df = pd.DataFrame({
-                'No': range(1, len(branch_data) + 1),
-                'Code': branch_data['Item No.'],
-                'Name': branch_data['Description'],
-                'Unit': branch_data['UNIT'],
-                'ORD': branch_data['Qty'],
-                'MBL': "", 'BNN': ""
-            })
-            items_df.to_excel(writer, sheet_name=clean_sheet_name, index=False, header=False, startrow=10)
-            apply_styles_to_sheet(writer.sheets[clean_sheet_name], s_branch, store_code, current_date, is_summary=False)
+            headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+                if (colNumber > maxIdCol) {
+                    const branchName = String(cell.value || '').trim();
+                    if (branchName && branchName !== 'null' && !branchName.includes('Unnamed') && !branchName.includes('Grand Total') && !branchName.includes('รวม')) {
+                        let code = '';
+                        if (nextRow && !isNextRowData) {
+                            const codeVal = nextRow.getCell(colNumber).value;
+                            code = (codeVal !== null && codeVal !== undefined) ? String(codeVal).trim() : '';
+                        }
+                        branchToCode[branchName] = code;
+                        branchCols.push({ index: colNumber, name: branchName });
+                    }
+                }
+            });
 
-        summary_all = final_list.groupby(['Item No.', 'Description', 'UNIT'], sort=False)['Qty'].sum().reset_index()
-        summary_all.insert(0, 'No', range(1, len(summary_all) + 1))
-        summary_all['MBL'] = ""; summary_all['BNN'] = ""
-        
-        summary_all.to_excel(writer, sheet_name="Summary_All", index=False, header=False, startrow=10)
-        ws_sum = writer.sheets["Summary_All"]
-        
-        last_row = 10 + len(summary_all) + 1
-        ws_sum.cell(row=last_row, column=3, value="Grand Total (ยอดรวมทั้งหมด)").font = Font(name='Cordia New', bold=True, size=14)
-        qty_total = ws_sum.cell(row=last_row, column=5, value=summary_all['Qty'].sum())
-        qty_total.font = Font(name='Cordia New', bold=True, size=14)
-        qty_total.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-        qty_total.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='double'))
+            // 3. ทรานส์ฟอร์มข้อมูล (Melt Data)
+            const startDataRow = headerRowIndex + (isNextRowData ? 1 : 2);
+            const finalData = [];
+            const summaryAll = {};
 
-        apply_styles_to_sheet(ws_sum, "สรุปยอดรวมทุกรายการ", "ALL", current_date, is_summary=True)
+            for (let r = startDataRow; r <= rawSheet.rowCount; r++) {
+                const row = rawSheet.getRow(r);
+                const itemNo = String(row.getCell(colIndices.itemNo).value || '').trim();
+                const description = String(row.getCell(colIndices.description).value || '').trim();
+                const unit = String(row.getCell(colIndices.unit).value || '').trim();
 
-    return output.getvalue()
+                if (!itemNo || itemNo === 'null' || itemNo === 'Grand Total' || itemNo.includes('ยอดรวม')) continue;
 
-def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=False):
-    font_name = 'Cordia New'
-    f_title = Font(name=font_name, bold=True, size=20)
-    f_header = Font(name=font_name, bold=True, size=14)
-    f_data = Font(name=font_name, size=14)
-    
-    # --- ปรับสีให้เหมาะกับการปริ้นท์ขาวดำ ---
-    f_black_bold = Font(name=font_name, bold=True, color="000000", size=14) # หัวตารางเป็นตัวหนาสีดำ
-    fill_light_green = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid") # เขียวอ่อน (พาสเทล)
-    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid") # ขาวล้วน
-    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                branchCols.forEach(branch => {
+                    const qtyVal = row.getCell(branch.index).value;
+                    const qty = Number(qtyVal);
+                    if (!isNaN(qty) && qty > 0) {
+                        finalData.push({
+                            branch: branch.name, itemNo, description, unit, qty
+                        });
 
-    # หัวที่อยู่บริษัท
-    ws.merge_cells('A1:G1')
-    ws['A1'] = "ใบสรุปรายการเบิกสินค้า" if is_summary else "ใบส่งสินค้าชั่วคราว"
-    ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center')
-    ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
-    ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
-    ws['A4'] = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws['A4'].font = f_data
-    
-    ws['G2'] = f"Date: {current_date}"; ws['G2'].alignment = Alignment(horizontal='right'); ws['G2'].font = f_header
-    ws['G4'] = f"Delivery Date: {current_date}"; ws['G4'].alignment = Alignment(horizontal='right'); ws['G4'].font = f_header
-    
-    ws['A7'] = f"Code: {store_code}"; ws['C7'] = f"Name: {branch_name}"
-    ws['A7'].font = ws['C7'].font = f_header
+                        const sumKey = `${itemNo}|${description}|${unit}`;
+                        if (!summaryAll[sumKey]) {
+                            summaryAll[sumKey] = { itemNo, description, unit, qty: 0 };
+                        }
+                        summaryAll[sumKey].qty += qty;
+                    }
+                });
+            }
 
-    # หัวตาราง
-    ws.merge_cells('E9:G9')
-    ws['E9'] = "Total Qty" if is_summary else "Qty"
-    ws['E9'].font, ws['E9'].fill, ws['E9'].border = f_black_bold, fill_light_green, border
-    ws['E9'].alignment = Alignment(horizontal='center')
-    
-    headers = ['No', 'Product Code', 'Product Name', 'Unit', 'TOTAL' if is_summary else 'ORDER', 'MBL', 'BNN']
-    for i, h in enumerate(headers, 1):
-        cell = ws.cell(row=10, column=i, value=h)
-        cell.font, cell.fill, cell.border = f_black_bold, fill_light_green, border
-        cell.alignment = Alignment(horizontal='center', vertical='center')
+            // กลุ่มข้อมูลตามสาขาเพื่อสร้างชีทระบบเดิม
+            const branchGroups = finalData.reduce((acc, curr) => {
+                if (!acc[curr.branch]) acc[curr.branch] = [];
+                acc[curr.branch].push(curr);
+                return acc;
+            }, {});
 
-    # เนื้อหาข้างใน (เป็นขาวล้วนทั้งหมด)
-    for row in ws.iter_rows(min_row=11, max_row=ws.max_row, min_col=1, max_col=7):
-        if str(ws.cell(row=row[0].row, column=3).value) == "Grand Total (ยอดรวมทั้งหมด)": continue
-        for cell in row:
-            cell.border = border
-            cell.font = f_data
-            cell.fill = fill_white # ขาวล้วน
-            if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
+            // 4. สร้างไฟล์ Excel ผลลัพธ์อันใหม่
+            const writeWb = new ExcelJS.Workbook();
+            const dateStr = new Date().toLocaleDateString('th-TH');
 
-    # ท้ายกระดาษ
-    if not is_summary:
-        curr_row = ws.max_row + 2
-        labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
-        for i, label in enumerate(labels):
-            ws.cell(row=curr_row + i, column=1, value=f"{label} .......................................................").font = f_header
-        
-        # ตารางตะกร้า
-        s_row = curr_row
-        for i, h in enumerate(["", "MBL", "BNN"]):
-            c = ws.cell(row=s_row, column=5+i, value=h)
-            c.font, c.fill, c.border = f_black_bold, fill_light_green, border
-            c.alignment = Alignment(horizontal='center')
-        for i, label in enumerate(["ตะกร้าใหญ่", "ตะกร้าเล็ก"], 1):
-            ws.cell(row=s_row + i, column=5, value=label).font = f_header
-            for col_idx in range(5, 8):
-                ws.cell(row=s_row + i, column=col_idx).border = border
+            // ฟังก์ชันจัดสไตล์หน้าตาตารางให้แพง ปริ้นท์สวย
+            const applyStyles = (ws, branchName, storeCode, isSummary) => {
+                const fontName = 'Cordia New';
+                const fTitle = { name: fontName, bold: true, size: 20 };
+                const fHeader = { name: fontName, bold: true, size: 14 };
+                const fData = { name: fontName, size: 14 };
+                const fBlackBold = { name: fontName, bold: true, color: { argb: 'FF000000' }, size: 14 };
+                const fillLightGreen = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC8E6C9' } };
+                const border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
 
-    ws.page_setup.paperSize = 9
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
-    widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
-    for col, w in widths.items(): ws.column_dimensions[col].width = w
+                ws.mergeCells('A1:G1');
+                ws.getCell('A1').value = isSummary ? "ใบสรุปรายการเบิกสินค้า (Uniform)" : "ใบส่งสินค้าชั่วคราว";
+                ws.getCell('A1').font = fTitle;
+                ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-# --- Streamlit UI ---
-st.title("🚚 | POD BNN - Print Friendly Edition | 🚚")
-file = st.file_uploader("Upload Excel", type="xlsx")
+                ws.getCell('A2').value = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws.getCell('A2').font = fHeader;
+                ws.getCell('A3').value = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws.getCell('A3').font = fData;
+                ws.getCell('A4').value = "โทร. 02-337-1200 แฟกซ์. 02-337-1201"; ws.getCell('A4').font = fData;
 
-if file:
-    with st.spinner('กำลังปรับสีให้เหมาะกับการปริ้นท์ขาวดำนะคะแม่...'):
-        try:
-            excel_bytes = process_excel_to_buffer(file)
-            st.success("💅🏻 กริบ! สีอ่อนโยน ปริ้นท์ออกมาดูแพงแน่นอนค่ะ 💅🏻")
-            st.download_button(label="📥 โหลดไฟล์เวอร์ชันปริ้นท์ตรงนี้ค่ะ", data=excel_bytes, file_name=f"POD_PrintFriendly_{datetime.now().strftime('%H%M')}.xlsx")
-        except Exception as e:
-            st.error(f"อุ๊ย! ผิดพลาดนิดหน่อยค่ะแม่: {e}")
+                ws.getCell('G2').value = `Date: ${dateStr}`; ws.getCell('G2').font = fHeader; ws.getCell('G2').alignment = { horizontal: 'right' };
+                ws.getCell('G4').value = `Delivery Date: ${dateStr}`; ws.getCell('G4').font = fHeader; ws.getCell('G4').alignment = { horizontal: 'right' };
+
+                ws.getCell('A7').value = `Code: ${storeCode}`; ws.getCell('A7').font = fHeader;
+                ws.getCell('C7').value = `Name: ${branchName}`; ws.getCell('C7').font = fHeader;
+
+                ws.mergeCells('E9:G9');
+                const e9 = ws.getCell('E9');
+                e9.value = isSummary ? "Total Qty" : "Qty";
+                e9.font = fBlackBold; e9.fill = fillLightGreen; e9.border = border; e9.alignment = { horizontal: 'center' };
+                ws.getCell('F9').border = border; ws.getCell('F9').fill = fillLightGreen;
+                ws.getCell('G9').border = border; ws.getCell('G9').fill = fillLightGreen;
+
+                const headers = ['No', 'Product Code', 'Product Name', 'Unit', isSummary ? 'TOTAL' : 'ORDER', 'MBL', 'BNN'];
+                headers.forEach((h, i) => {
+                    const cell = ws.getCell(10, i + 1);
+                    cell.value = h;
+                    cell.font = fBlackBold; cell.fill = fillLightGreen; cell.border = border;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                });
+
+                ws.columns = [
+                    { width: 6 }, { width: 16 }, { width: 35 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }
+                ];
+                
+                ws.pageSetup = { paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+                return border;
+            };
+
+            // สร้างชีทแยกตามสาขา (ระบบเดิมยังอยู่ครบ)
+            for (const [branchName, items] of Object.entries(branchGroups)) {
+                let cleanName = branchName.replace(/[^a-zA-Z0-9ก-๙ \-_]/g, '').substring(0, 30);
+                const ws = writeWb.addWorksheet(cleanName);
+                const code = branchToCode[branchName] || "";
+                
+                const borderStyle = applyStyles(ws, branchName, code, false);
+
+                let currentRow = 11;
+                items.forEach((item, index) => {
+                    ws.getRow(currentRow).values = [index + 1, item.itemNo, item.description, item.unit, item.qty, '', ''];
+                    
+                    for(let c = 1; c <= 7; c++) {
+                        let cell = ws.getCell(currentRow, c);
+                        cell.font = { name: 'Cordia New', size: 14 };
+                        cell.border = borderStyle;
+                        if ([1, 4, 5, 6, 7].includes(c)) cell.alignment = { horizontal: 'center' };
+                    }
+                    currentRow++;
+                });
+
+                // ท้ายกระดาษ + ลายเซ็น
+                currentRow += 2;
+                ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"].forEach((label, i) => {
+                    ws.getCell(currentRow + i, 1).value = `${label} .......................................................`;
+                    ws.getCell(currentRow + i, 1).font = { name: 'Cordia New', bold: true, size: 14 };
+                });
+
+                // ตารางใส่จำนวนตะกร้าขนส่ง
+                let basketRow = currentRow;
+                ["", "MBL", "BNN"].forEach((h, i) => {
+                    let c = ws.getCell(basketRow, 5 + i);
+                    c.value = h; c.font = { name: 'Cordia New', bold: true, size: 14 };
+                    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC8E6C9' } };
+                    c.border = borderStyle; c.alignment = { horizontal: 'center' };
+                });
+                ["ตะกร้าใหญ่", "ตะกร้าเล็ก"].forEach((label, i) => {
+                    ws.getCell(basketRow + i, 5).value = label;
+                    ws.getCell(basketRow + i, 5).font = { name: 'Cordia New', bold: true, size: 14 };
+                    for(let c = 5; c <= 7; c++) ws.getCell(basketRow + i, c).border = borderStyle;
+                });
+            }
+
+            // 5. สร้างหน้าสรุปยอดรวม (เปลี่ยนชื่อเป็น "เบิก Uniform" ตามสั่ง)
+            const wsSum = writeWb.addWorksheet("เบิก Uniform");
+            const sumBorder = applyStyles(wsSum, "สรุปยอดรวมทุกรายการ", "ALL", true);
+            
+            let sumRow = 11;
+            let totalQtySum = 0;
+            Object.values(summaryAll).forEach((item, index) => {
+                wsSum.getRow(sumRow).values = [index + 1, item.itemNo, item.description, item.unit, item.qty, '', ''];
+                totalQtySum += item.qty;
+                for(let c = 1; c <= 7; c++) {
+                    let cell = wsSum.getCell(sumRow, c);
+                    cell.font = { name: 'Cordia New', size: 14 };
+                    cell.border = sumBorder;
+                    if ([1, 4, 5, 6, 7].includes(c)) cell.alignment = { horizontal: 'center' };
+                }
+                sumRow++;
+            });
+
+            // แถว Grand Total (สรุปยอดท้ายสุด)
+            wsSum.getCell(sumRow, 3).value = "Grand Total (ยอดรวมทั้งหมด)";
+            wsSum.getCell(sumRow, 3).font = { name: 'Cordia New', bold: true, size: 14 };
+            
+            let qtyTotalCell = wsSum.getCell(sumRow, 5);
+            qtyTotalCell.value = totalQtySum;
+            qtyTotalCell.font = { name: 'Cordia New', bold: true, size: 14 };
+            qtyTotalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }; // เน้นไฮไลท์สีเหลือง
+            qtyTotalCell.border = { top: {style:'thin'}, bottom: {style:'double'}, left: {style:'thin'}, right: {style:'thin'} };
+            qtyTotalCell.alignment = { horizontal: 'center' };
+
+            // คอนเวิร์ตไฟล์ออกเป็น Blob เพื่อดาวน์โหลด
+            const outBuffer = await writeWb.xlsx.writeBuffer();
+            const blob = new Blob([outBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const timeStr = new Date().toTimeString().slice(0,5).replace(':','');
+            
+            spinner.style.display = 'none';
+            statusText.innerHTML = '<span style="color: #059669;">💅🏻 เรียบร้อยค่ะแม่! แยกชีทรายสาขาครบ พร้อมมีหน้า "เบิก Uniform" ให้แล้วค่ะ 💅🏻</span>';
+            
+            btnDownload.style.display = 'block';
+            btnDownload.onclick = function() {
+                saveAs(blob, `POD_UniformRequisition_${timeStr}.xlsx`);
+            };
+
+        } catch (error) {
+            spinner.style.display = 'none';
+            statusText.innerHTML = `<span style="color: #DC2626;">อุ๊ย! เกิดข้อผิดพลาด: ${error.message}</span>`;
+            console.error(error);
+        }
+    });
+</script>
+
+</body>
+</html>
