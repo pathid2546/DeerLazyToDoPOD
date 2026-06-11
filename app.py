@@ -8,7 +8,7 @@ from datetime import datetime
 st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 1: ระบบเดิม (อิงตามโค้ดต้นฉบับ 100%)
+# ฟังก์ชันสำหรับ Tab 1: ระบบเดิม (มีลายเซ็นและตารางตะกร้าครบ)
 # =======================================================
 def process_excel_original(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -144,8 +144,9 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
     widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
+
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 2: ระบบเบิก Uniform 
+# ฟังก์ชันสำหรับ Tab 2: ระบบเบิก Uniform (เอาส่วนท้ายออกแล้ว)
 # =======================================================
 def process_excel_uniform(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -286,21 +287,7 @@ def apply_styles_uniform(ws, branch_name, store_code, current_date, is_summary):
             cell.fill = fill_white
             if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-    if not is_summary:
-        curr_row = ws.max_row + 2
-        labels = ["ผู้รับสินค้า:", "ผู้ส่งสินค้า:", "ทะเบียนรถ:", "คลังสินค้า:"]
-        for i, label in enumerate(labels):
-            ws.cell(row=curr_row + i, column=1, value=f"{label} .......................................................").font = f_header
-        
-        s_row = curr_row
-        for i, h in enumerate(["", "MBL", "BNN"]):
-            c = ws.cell(row=s_row, column=5+i, value=h)
-            c.font, c.fill, c.border = f_black_bold, fill_light_green, border
-            c.alignment = Alignment(horizontal='center')
-        for i, label in enumerate(["ตะกร้าใหญ่", "ตะกร้าเล็ก"], 1):
-            ws.cell(row=s_row + i, column=5, value=label).font = f_header
-            for col_idx in range(5, 8):
-                ws.cell(row=s_row + i, column=col_idx).border = border
+    # --- ส่วนท้ายกระดาษถูกเอาออกไปเรียบร้อยแล้วสำหรับ Tab นี้ ---
 
     ws.page_setup.paperSize = 9
     ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -319,7 +306,7 @@ tab1, tab2 = st.tabs(["📦 ระบบใบส่งสินค้า (แ�
 # --- การทำงานใน Tab 1 (ระบบเดิม) ---
 with tab1:
     st.subheader("📦 จัดการใบส่งสินค้า (POD BNN)")
-    st.write("ระบบนี้จะใช้โครงสร้างตาราง **แบบเดิม 100%** และสร้างหน้าสรุปชื่อ **Summary_All**")
+    st.write("ระบบนี้จะใช้โครงสร้างตาราง **แบบเดิม 100%** (มีตารางตะกร้าและลายเซ็น)")
     
     file_pod = st.file_uploader("Upload Excel สำหรับใบส่งสินค้า", type="xlsx", key="pod")
     if file_pod:
@@ -339,7 +326,7 @@ with tab1:
 # --- การทำงานใน Tab 2 (ระบบ Uniform) ---
 with tab2:
     st.subheader("👕 จัดการใบเบิก Uniform")
-    st.write("ระบบนี้จะรองรับหัวตาราง **ภาษาไทย/อังกฤษ** และเปลี่ยนหน้าสรุปเป็น **เบิก Uniform**")
+    st.write("ระบบนี้จะเปลี่ยนชื่อชีทเป็น **เบิก Uniform** และ **นำส่วนท้ายกระดาษ (ลายเซ็น/ตะกร้า) ออก**")
     
     file_uni = st.file_uploader("Upload Excel สำหรับเบิก Uniform", type="xlsx", key="uni")
     if file_uni:
