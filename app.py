@@ -7,10 +7,10 @@ from datetime import datetime
 
 st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 
-def process_excel_to_buffer(uploaded_file):
+def process_excel_to_buffer(uploaded_file, summary_sheet_name="Summary_All", is_uniform=False):
     raw_df = pd.read_excel(uploaded_file, header=None)
     
-    # 1. ค้นหาแถวที่เป็นหัวตาราง (รองรับทั้ง ไทย/อังกฤษ)
+    # 1. ค้นหาแถวที่เป็นหัวตาราง
     header_row_index = -1
     for i, row in raw_df.iterrows():
         row_strs = [str(v).strip() for v in row.values]
@@ -53,13 +53,16 @@ def process_excel_to_buffer(uploaded_file):
     df = df[valid_columns]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # หาชื่อคอลัมน์ ID ให้ตรงเป๊ะ
+    # หาชื่อคอลัมน์ ID 
     id_cols = []
     for col in df.columns:
         if 'Item No.' in col or 'รหัสสินค้า' in col: id_cols.append(col)
         elif 'Description' in col or 'ชื่อสินค้า' in col: id_cols.append(col)
         elif 'UNIT' in col or 'หน่วย' in col: id_cols.append(col)
     id_cols = id_cols[:3]
+    
+    if len(id_cols) < 3: # เผื่อฉุกเฉิน
+        id_cols = list(df.columns)[:3]
 
     df_melted = df.melt(id_vars=id_cols, var_name='Branch', value_name='Qty')
     df_melted['Qty'] = pd.to_numeric(df_melted['Qty'], errors='coerce')
@@ -70,7 +73,7 @@ def process_excel_to_buffer(uploaded_file):
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # สร้างชีทรายสาขา (ระบบเดิม)
+        # สร้างชีทรายสาขา
         for branch_name, branch_data in final_list.groupby('Branch', sort=False):
             s_branch = str(branch_name)
             store_code = branch_to_code.get(s_branch.strip(), "")
@@ -85,15 +88,15 @@ def process_excel_to_buffer(uploaded_file):
                 'MBL': "", 'BNN': ""
             })
             items_df.to_excel(writer, sheet_name=clean_sheet_name, index=False, header=False, startrow=10)
-            apply_styles_to_sheet(writer.sheets[clean_sheet_name], s_branch, store_code, current_date, is_summary=False)
+            apply_styles_to_sheet(writer.sheets[clean_sheet_name], s_branch, store_code, current_date, is_summary=False, is_uniform=is_uniform)
 
-        # สร้าง Tab "เบิก Uniform"
+        # สร้าง Tab สรุป
         summary_all = final_list.groupby(id_cols, sort=False)['Qty'].sum().reset_index()
         summary_all.insert(0, 'No', range(1, len(summary_all) + 1))
         summary_all['MBL'] = ""; summary_all['BNN'] = ""
         
-        summary_all.to_excel(writer, sheet_name="เบิก Uniform", index=False, header=False, startrow=10)
-        ws_sum = writer.sheets["เบิก Uniform"]
+        summary_all.to_excel(writer, sheet_name=summary_sheet_name, index=False, header=False, startrow=10)
+        ws_sum = writer.sheets[summary_sheet_name]
         
         last_row = 10 + len(summary_all) + 1
         ws_sum.cell(row=last_row, column=3, value="Grand Total (ยอดรวมทั้งหมด)").font = Font(name='Cordia New', bold=True, size=14)
@@ -102,11 +105,11 @@ def process_excel_to_buffer(uploaded_file):
         qty_total.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
         qty_total.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='double'))
 
-        apply_styles_to_sheet(ws_sum, "สรุปยอดรวมทุกรายการ", "ALL", current_date, is_summary=True)
+        apply_styles_to_sheet(ws_sum, "สรุปยอดรวมทุกรายการ", "ALL", current_date, is_summary=True, is_uniform=is_uniform)
 
     return output.getvalue()
 
-def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=False):
+def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=False, is_uniform=False):
     font_name = 'Cordia New'
     f_title = Font(name=font_name, bold=True, size=20)
     f_header = Font(name=font_name, bold=True, size=14)
@@ -118,7 +121,13 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
     border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
     ws.merge_cells('A1:G1')
-    ws['A1'] = "ใบสรุปรายการเบิกสินค้า (Uniform)" if is_summary else "ใบส่งสินค้าชั่วคราว"
+    
+    # ปรับชื่อหัวกระดาษให้ตรงกับหมวดหมู่
+    if is_summary:
+        ws['A1'] = "ใบสรุปรายการเบิกสินค้า (Uniform)" if is_uniform else "ใบสรุปรายการเบิกสินค้า"
+    else:
+        ws['A1'] = "ใบส่งสินค้าชั่วคราว"
+        
     ws['A1'].font = f_title; ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws['A2'] = "บริษัท โมบาย โลจิสติกส์ จำกัด"; ws['A2'].font = f_header
     ws['A3'] = "278 หมู่ที่ 9 ตำบลบางโฉลง อ.บางพลี จ.สมุทรปราการ 10540"; ws['A3'].font = f_data
@@ -175,18 +184,47 @@ def apply_styles_to_sheet(ws, branch_name, store_code, current_date, is_summary=
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
 # --- Streamlit UI ---
-st.title("🚚 | POD BNN - Uniform Edition | 🚚")
-file = st.file_uploader("Upload Excel", type="xlsx")
+st.title("🚚 | Delivery Formatter Pro | 🚚")
 
-if file:
-    with st.spinner('กำลังจัดฟอร์มและสร้าง Tab เบิก Uniform ให้อยู่นะคะแม่...'):
-        try:
-            excel_bytes = process_excel_to_buffer(file)
-            st.success("💅🏻 กริบ! สีอ่อนโยน ปริ้นท์ออกมาดูแพงแน่นอนค่ะ 💅🏻")
-            st.download_button(
-                label="📥 โหลดไฟล์เวอร์ชันปริ้นท์ตรงนี้ค่ะแม่", 
-                data=excel_bytes, 
-                file_name=f"POD_UniformRequisition_{datetime.now().strftime('%H%M')}.xlsx"
-            )
-        except Exception as e:
-            st.error(f"อุ๊ย! ผิดพลาดนิดหน่อยค่ะแม่: {e}")
+# สร้าง Tab บนหน้าเว็บ 2 อัน
+tab1, tab2 = st.tabs(["📦 ระบบใบส่งสินค้า (แบบเดิม)", "👕 Tab เบิก Uniform"])
+
+# ----------------- ส่วนของระบบเดิม -----------------
+with tab1:
+    st.subheader("📦 จัดการใบส่งสินค้า (POD BNN)")
+    st.write("ระบบนี้จะสร้างไฟล์โดยมีหน้าสรุปชื่อว่า **Summary_All**")
+    
+    file_pod = st.file_uploader("Upload Excel สำหรับใบส่งสินค้า", type="xlsx", key="pod")
+    if file_pod:
+        with st.spinner('กำลังจัดฟอร์มให้นะคะแม่...'):
+            try:
+                excel_bytes = process_excel_to_buffer(file_pod, summary_sheet_name="Summary_All", is_uniform=False)
+                st.success("✅ เสร็จเรียบร้อย! ปริ้นท์ออกมาดูแพงแน่นอนค่ะ")
+                st.download_button(
+                    label="📥 ดาวน์โหลดไฟล์ใบส่งสินค้า", 
+                    data=excel_bytes, 
+                    file_name=f"POD_PrintFriendly_{datetime.now().strftime('%H%M')}.xlsx",
+                    key="dl_pod"
+                )
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
+
+# ----------------- ส่วนของ Tab เบิก Uniform -----------------
+with tab2:
+    st.subheader("👕 จัดการใบเบิก Uniform")
+    st.write("ระบบนี้จะสร้างไฟล์โดยมีหน้าสรุปชื่อว่า **เบิก Uniform** และเปลี่ยนหัวกระดาษเป็น Uniform")
+    
+    file_uni = st.file_uploader("Upload Excel สำหรับเบิก Uniform", type="xlsx", key="uni")
+    if file_uni:
+        with st.spinner('กำลังสร้าง Tab เบิก Uniform ให้นะคะแม่...'):
+            try:
+                excel_bytes_uni = process_excel_to_buffer(file_uni, summary_sheet_name="เบิก Uniform", is_uniform=True)
+                st.success("✅ เสร็จเรียบร้อย! สร้าง Tab เบิก Uniform ให้แล้วค่ะ")
+                st.download_button(
+                    label="📥 ดาวน์โหลดไฟล์เบิก Uniform", 
+                    data=excel_bytes_uni, 
+                    file_name=f"POD_UniformRequisition_{datetime.now().strftime('%H%M')}.xlsx",
+                    key="dl_uni"
+                )
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
