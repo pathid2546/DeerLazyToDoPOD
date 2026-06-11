@@ -403,7 +403,7 @@ def process_excel_packing(uploaded_file):
 def apply_styles_packing(ws, branch_name, current_date):
     font_name = 'Cordia New'
     
-    f_branch_title = Font(name=font_name, bold=True, size=26, color="000000") 
+    f_branch_title = Font(name=font_name, bold=True, size=36, color="000000") 
     f_normal_header = Font(name=font_name, size=14, color="555555") 
     f_table_header = Font(name=font_name, bold=True, size=15, color="000000")
     f_data = Font(name=font_name, size=15)
