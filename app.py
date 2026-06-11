@@ -8,7 +8,7 @@ from datetime import datetime
 st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 1: ระบบเดิม (มีลายเซ็นและตารางตะกร้าครบ)
+# ฟังก์ชันสำหรับ Tab 1: ระบบเดิม (อิงตามโค้ดต้นฉบับ 100%)
 # =======================================================
 def process_excel_original(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -146,7 +146,7 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
 
 
 # =======================================================
-# ฟังก์ชันสำหรับ Tab 2: ระบบเบิก Uniform (เอาส่วนท้ายออกแล้ว)
+# ฟังก์ชันสำหรับ Tab 2: ระบบเบิก Uniform (เปลี่ยนเป็นตารางบันทึกเซ็นชื่อ Grid Box)
 # =======================================================
 def process_excel_uniform(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -287,7 +287,44 @@ def apply_styles_uniform(ws, branch_name, store_code, current_date, is_summary):
             cell.fill = fill_white
             if cell.column in [1, 4, 5, 6, 7]: cell.alignment = Alignment(horizontal='center')
 
-    # --- ส่วนท้ายกระดาษถูกเอาออกไปเรียบร้อยแล้วสำหรับ Tab นี้ ---
+    # --- ส่วนท้ายกระดาษ: ตารางบันทึกเซ็นชื่อแบบ Grid Box (เฉพาะหน้าสาขา ไม่ใช่หน้าสรุป) ---
+    if not is_summary:
+        curr_row = ws.max_row + 2
+        
+        # 1. หัวข้อแถวแรกของตารางเซ็นชื่อ
+        ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=2)
+        ws.cell(row=curr_row, column=1, value="ผู้รับสินค้า")
+        
+        ws.merge_cells(start_row=curr_row, start_column=3, end_row=curr_row, end_column=4)
+        ws.cell(row=curr_row, column=3, value="ผู้ส่งสินค้า / ทะเบียนรถ")
+        
+        ws.merge_cells(start_row=curr_row, start_column=5, end_row=curr_row, end_column=7)
+        ws.cell(row=curr_row, column=5, value="คลังสินค้า")
+        
+        for col in range(1, 8):
+            cell = ws.cell(row=curr_row, column=col)
+            cell.font = Font(name=font_name, bold=True, size=14)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+            
+        # 2. รายละเอียดลายเซ็น 4 แถวตามรูปแบบกล่อง
+        sign_labels = ['ชื่อ (ตัวบรรจง):', 'วันที่:', 'เวลา:', 'หมายเหตุ:']
+        for lbl in sign_labels:
+            curr_row += 1
+            ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=2)
+            ws.cell(row=curr_row, column=1, value=lbl)
+            
+            ws.merge_cells(start_row=curr_row, start_column=3, end_row=curr_row, end_column=4)
+            ws.cell(row=curr_row, column=3, value=lbl)
+            
+            ws.merge_cells(start_row=curr_row, start_column=5, end_row=curr_row, end_column=7)
+            ws.cell(row=curr_row, column=5, value=lbl)
+            
+            for col in range(1, 8):
+                cell = ws.cell(row=curr_row, column=col)
+                cell.font = Font(name=font_name, size=14)
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+                cell.border = border
 
     ws.page_setup.paperSize = 9
     ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -306,7 +343,7 @@ tab1, tab2 = st.tabs(["📦 ระบบใบส่งสินค้า (แ�
 # --- การทำงานใน Tab 1 (ระบบเดิม) ---
 with tab1:
     st.subheader("📦 จัดการใบส่งสินค้า (POD BNN)")
-    st.write("ระบบนี้จะใช้โครงสร้างตาราง **แบบเดิม 100%** (มีตารางตะกร้าและลายเซ็น)")
+    st.write("ระบบนี้จะใช้โครงสร้างตาราง **แบบเดิม 100%** (มีตารางตะกร้าและลายเซ็นแบบเดิม)")
     
     file_pod = st.file_uploader("Upload Excel สำหรับใบส่งสินค้า", type="xlsx", key="pod")
     if file_pod:
@@ -326,14 +363,14 @@ with tab1:
 # --- การทำงานใน Tab 2 (ระบบ Uniform) ---
 with tab2:
     st.subheader("👕 จัดการใบเบิก Uniform")
-    st.write("ระบบนี้จะเปลี่ยนชื่อชีทเป็น **เบิก Uniform** และ **นำส่วนท้ายกระดาษ (ลายเซ็น/ตะกร้า) ออก**")
+    st.write("ระบบนี้จะเปลี่ยนชื่อชีทเป็น **เบิก Uniform** และเปลี่ยนส่วนเซ็นชื่อท้ายกระดาษเป็น **ตารางบันทึกกล่อง Grid Box**")
     
     file_uni = st.file_uploader("Upload Excel สำหรับเบิก Uniform", type="xlsx", key="uni")
     if file_uni:
         with st.spinner('กำลังสร้าง Tab เบิก Uniform ให้นะคะแม่...'):
             try:
                 excel_bytes_uni = process_excel_uniform(file_uni)
-                st.success("✅ เสร็จเรียบร้อย! สร้าง Tab เบิก Uniform ให้แล้วค่ะ")
+                st.success("✅ เสร็จเรียบร้อย! สร้างตารางเซ็นชื่อแบบกล่องให้แล้วค่ะแม่")
                 st.download_button(
                     label="📥 ดาวน์โหลดไฟล์เบิก Uniform", 
                     data=excel_bytes_uni, 
