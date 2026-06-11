@@ -11,23 +11,17 @@ st.set_page_config(page_title="Delivery Formatter Pro", layout="wide")
 # ฟังก์ชันช่วยดึงวันที่จากคำว่า "รอบส่ง" ในไฟล์ Excel
 # =======================================================
 def extract_delivery_date(raw_df):
-    # ค่าเริ่มต้นคือวันที่ปัจจุบัน เผื่อในไฟล์ไม่มีคำว่ารอบส่ง
     delivery_date = datetime.now().strftime('%d/%m/%Y')
-    
-    # ค้นหาใน 10 แถวแรกของไฟล์
     for i, row in raw_df.head(10).iterrows():
         for j, val in enumerate(row.values):
             if str(val).strip() == 'รอบส่ง':
-                # วันที่จะต้องอยู่คอลัมน์ถัดไป
                 if j + 1 < len(row.values):
                     raw_date = row.values[j + 1]
                     if pd.notna(raw_date) and str(raw_date).strip() != '':
                         try:
-                            # แปลงฟอร์แมตวันที่ให้ออกมาเป็น DD/MM/YYYY สวยๆ
                             parsed = pd.to_datetime(raw_date)
                             return parsed.strftime('%d/%m/%Y')
                         except:
-                            # ถ้าแปลงไม่ได้ให้ดึงข้อความดิบๆ มาเลย
                             return str(raw_date).strip()
     return delivery_date
 
@@ -36,7 +30,7 @@ def extract_delivery_date(raw_df):
 # =======================================================
 def process_excel_original(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
-    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
+    current_date = extract_delivery_date(raw_df) 
     
     header_row_index = next(i for i, row in raw_df.iterrows() if 'Item No.' in [str(v) for v in row.values])
     header_row_raw = raw_df.iloc[header_row_index].fillna("").astype(str).str.strip().tolist()
@@ -169,7 +163,7 @@ def apply_styles_original(ws, branch_name, store_code, current_date, is_summary=
 # =======================================================
 def process_excel_uniform(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
-    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
+    current_date = extract_delivery_date(raw_df) 
     
     header_row_index = -1
     for i, row in raw_df.iterrows():
@@ -327,6 +321,10 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
+    
+    # +++ ตั้งค่าให้ล็อคหัวกระดาษพ่วงไปทุกหน้าสำหรับ Tab 1 และ Tab 2 +++
+    ws.print_title_rows = '1:10' 
+    
     widths = {'A': 6, 'B': 16, 'C': 35, 'D': 10, 'E': 12, 'F': 10, 'G': 10}
     for col, w in widths.items(): ws.column_dimensions[col].width = w
 
@@ -335,7 +333,7 @@ def apply_styles_uniform(ws, branch_name, current_date, is_summary):
 # =======================================================
 def process_excel_packing(uploaded_file):
     raw_df = pd.read_excel(uploaded_file, header=None)
-    current_date = extract_delivery_date(raw_df) # ดึงวันที่จากรอบส่ง
+    current_date = extract_delivery_date(raw_df) 
     
     header_row_index = -1
     for i, row in raw_df.iterrows():
@@ -368,7 +366,6 @@ def process_excel_packing(uploaded_file):
     df = df[valid_columns]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # ดึงคอลัมน์ รหัสสินค้า, รายการสินค้า, หน่วย ให้ชัวร์
     item_col = df.columns[0]
     desc_col = None
     unit_col = None
@@ -391,7 +388,6 @@ def process_excel_packing(uploaded_file):
             s_branch = str(branch_name)
             clean_sheet_name = "".join([c for c in s_branch if c.isalnum() or c in ' -_ก-๙'])[:30]
             
-            # ทำตาราง 4 คอลัมน์ [รหัสสินค้า, รายการสินค้า, หน่วย, จำนวน]
             items_df = pd.DataFrame({
                 'รหัสสินค้า': branch_data[item_col],
                 'รายการสินค้า': branch_data[desc_col],
@@ -415,21 +411,18 @@ def apply_styles_packing(ws, branch_name, current_date):
     fill_light_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    # แถวที่ 1: โชว์แค่ชื่อสาขาเพียวๆ ตัวใหญ่ยักษ์ (ลากคลุม 4 คอลัมน์ A-D)
     ws.merge_cells('A1:D1')
     ws['A1'] = branch_name
     ws['A1'].font = f_branch_title
     ws['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[1].height = 40
 
-    # แถวที่ 2: โชว์แค่วันที่จัดพิมพ์
     ws.merge_cells('A2:D2')
     ws['A2'] = f"วันที่จัดทำพิมพ์ฟอร์ม: {current_date}"
     ws['A2'].font = f_normal_header
     ws['A2'].alignment = Alignment(horizontal='left', vertical='center')
     ws.row_dimensions[2].height = 20
 
-    # แถวที่ 5: หัวตาราง 4 คอลัมน์
     ws['A5'] = "รหัสสินค้า"
     ws['B5'] = "รายการสินค้า"
     ws['C5'] = "หน่วย"
@@ -440,46 +433,41 @@ def apply_styles_packing(ws, branch_name, current_date):
         cell.font = f_table_header
         cell.fill = fill_light_gray
         cell.border = border_thin
-        # A, B ชิดซ้าย | C, D ไว้ตรงกลาง
         align_pos = 'center' if col_letter in ['C', 'D'] else 'left'
         cell.alignment = Alignment(horizontal=align_pos, vertical='center')
     ws.row_dimensions[5].height = 25
 
-    # จัดการเส้นขอบและฟอนต์ให้กับข้อมูลในตาราง
     for row in ws.iter_rows(min_row=6, max_row=ws.max_row, min_col=1, max_col=4):
         ws.row_dimensions[row[0].row].height = 24
         
-        # A: รหัสสินค้า
         row[0].font = f_data
         row[0].border = border_thin
         row[0].alignment = Alignment(horizontal='left', vertical='center')
         
-        # B: รายการสินค้า
         row[1].font = f_data
         row[1].border = border_thin
         row[1].alignment = Alignment(horizontal='left', vertical='center')
         
-        # C: หน่วย
         row[2].font = f_data
         row[2].border = border_thin
         row[2].alignment = Alignment(horizontal='center', vertical='center')
         
-        # D: จำนวน
         row[3].font = Font(name=font_name, bold=True, size=15)
         row[3].border = border_thin
         row[3].alignment = Alignment(horizontal='center', vertical='center')
 
-    # ตั้งค่าหน้ากระดาษให้ฟิก A4 (บีบความกว้างให้พอดี 1 หน้า)
-    ws.page_setup.paperSize = 9 # กระดาษ A4
+    ws.page_setup.paperSize = 9 
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth = 1 # ฟิกความกว้างให้พอดี 1 หน้า
-    ws.page_setup.fitToHeight = 0 # ปล่อยความยาวให้ไหลได้
+    ws.page_setup.fitToWidth = 1 
+    ws.page_setup.fitToHeight = 0 
     
-    # กำหนดความกว้าง 4 คอลัมน์ ให้รวมกันพอดีหน้า A4 (กะสัดส่วนให้สวยงาม)
-    ws.column_dimensions['A'].width = 16 # รหัสสินค้า
-    ws.column_dimensions['B'].width = 45 # รายการสินค้า (กว้างสุด)
-    ws.column_dimensions['C'].width = 10 # หน่วย
-    ws.column_dimensions['D'].width = 12 # จำนวน
+    # +++ เพิ่มบรรทัดนี้ เพื่อทำซ้ำหัวกระดาษ (แถว 1 ถึง 5) ในทุกหน้าที่ปริ้นท์ +++
+    ws.print_title_rows = '1:5'
+    
+    ws.column_dimensions['A'].width = 16 
+    ws.column_dimensions['B'].width = 45 
+    ws.column_dimensions['C'].width = 10 
+    ws.column_dimensions['D'].width = 12 
 
 # =======================================================
 # หน้าจอ UI ของระบบ (Streamlit)
@@ -532,14 +520,14 @@ with tab2:
 
 with tab3:
     st.subheader("📋 ออกใบจัด Uniform (ล้างฟอร์มใหม่)")
-    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **4 คอลัมน์ (รหัส/รายการ/หน่วย/จำนวน)** แยกหน้า **A4 รายสาขา**")
+    st.write("ระบบใหม่แกะกล่องตามสั่ง: ตารางกระชับ **4 คอลัมน์ (รหัส/รายการ/หน่วย/จำนวน)** แยกหน้า **A4 รายสาขา** (หัวกระดาษพ่วงทุกหน้าแล้วค่ะ!)")
     
     file_pack = st.file_uploader("Upload Excel สำหรับออกใบจัดสินค้า", type="xlsx", key="pack")
     if file_pack:
         with st.spinner('กำลังดีไซน์ฟอร์มจัดแพ็คสินค้าใหม่อยู่นะคะแม่...'):
             try:
                 excel_bytes_pack = process_excel_packing(file_pack)
-                st.success("💅🏻 กริบมากแม่! ฟอร์ม 4 คอลัมน์ หัวสาขาเดี่ยวๆ พร้อมสั่งพิมพ์สับๆ เลยค่ะ")
+                st.success("💅🏻 กริบมากแม่! ฟอร์ม 4 คอลัมน์ หัวสาขาพ่วงไปหน้า 2 ให้เรียบร้อย พร้อมปริ้นท์สับๆ ค่ะ")
                 st.download_button(
                     label="📥 ดาวน์โหลดใบจัดยูนิฟอร์ม (ฟอร์มใหม่)", 
                     data=excel_bytes_pack, 
